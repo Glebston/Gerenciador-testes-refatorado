@@ -1,3 +1,4 @@
+import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { auth } from './firebaseConfig.js';
 import { DOM, showInfoModal, showForgotPasswordModal, showConfirmModal } from './ui.js';
@@ -60,4 +61,5 @@ export const handleRequestDeletion = async () => {
         const userEmail = auth.currentUser ? auth.currentUser.email : "[seu e-mail]";
         showInfoModal(`Para concluir, por favor, envie um e-mail de ${userEmail} para ${adminEmail} solicitando a remoção da sua conta. O administrador processará seu pedido.`);
     }
+
 };
