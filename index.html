@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Pedidos</title>
+    <link rel="icon" href="https://i.ibb.co/BHq1HsPG/2-removebg-preview.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="antialiased text-gray-800 bg-slate-50">
+
+    <div id="authContainer" class="flex items-center justify-center min-h-screen">
+        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-md">
+            <form id="loginForm">
+                <h2 class="text-2xl font-bold text-center">Login</h2>
+                <div class="mt-4 space-y-4">
+                    <input type="email" id="loginEmail" placeholder="E-mail" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <input type="password" id="loginPassword" placeholder="Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <button type="submit" class="w-full px-4 py-2 mt-6 font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700">Entrar</button>
+                 <div class="mt-4 text-center">
+                    <a href="#" id="forgotPasswordBtn" class="text-sm text-blue-600 hover:underline">Esqueci minha senha</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="app" class="hidden">
+        <header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
+            <div class="w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <img src="https://i.ibb.co/BHq1HsPG/2-removebg-preview.png" alt="Logo" class="h-8 w-auto mr-3">
+                    <h1 class="text-xl font-bold text-gray-900">Gerenciador de Pedidos</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="priceTableBtn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-gray-300 transition duration-300 flex items-center justify-center" title="Tabela de Preços">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a1 1 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <button id="addOrderBtn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        Novo Pedido
+                    </button>
+                    <div class="relative" id="userMenuContainer">
+                        <button id="userMenuBtn" class="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+                            <span id="userEmail" class="hidden sm:inline"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-5.5-2.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM10 12a5.99 5.99 0 00-4.793 2.39A6.483 6.483 0 0010 16.5a6.483 6.483 0 004.793-2.11A5.99 5.99 0 0010 12z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <div id="userDropdown" class="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg z-50 hidden ring-1 ring-black ring-opacity-5">
+                            <a href="#" id="financeDashboardBtn" class="flex items-center gap-3 block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"></a>
+                            <div class="border-t border-gray-100"></div>
+                            <a href="#" id="backupBtn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Fazer Backup</a>
+                            <label for="restoreFile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">Importar Backup</label>
+                            <input type="file" id="restoreFile" class="hidden" accept=".json">
+                            <a href="#" id="toggleViewBtn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Ver Entregues</a>
+                            <div class="border-t border-gray-100"></div>
+                            <a href="#" id="requestDeletionBtn" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50">Solicitar Exclusão de Conta</a>
+                            <div class="border-t border-gray-100"></div>
+                            <a href="#" id="logoutBtn" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50">Sair</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main id="mainContent" class="w-full mx-auto p-4 sm:p-6 lg:px-8">
+            <div id="ordersDashboard">
+                <div id="ordersList">
+                    <div id="loadingIndicator" class="text-center w-full text-gray-500 col-span-full">Carregando pedidos...</div>
+                </div>
+            </div>
+            <div id="financeDashboard" class="hidden">
+                <div class="mb-6 flex flex-wrap gap-4 justify-between items-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Dashboard Financeiro</h2>
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <div id="customPeriodContainer" class="hidden flex items-center gap-2">
+                            <input type="date" id="startDateInput" class="p-2 border rounded-md bg-white text-sm">
+                            <span class="text-gray-500">até</span>
+                            <input type="date" id="endDateInput" class="p-2 border rounded-md bg-white text-sm">
+                        </div>
+                        <select id="periodFilter" class="p-2 border rounded-md bg-white">
+                            <option value="thisMonth">Este Mês</option>
+                            <option value="lastMonth">Mês Passado</option>
+                            <option value="thisYear">Este Ano</option>
+                            <option value="custom">Período Personalizado</option>
+                        </select>
+                        <button id="copyReportBtn" class="bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 text-sm flex items-center gap-2" title="Copiar dados para colar em planilha">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M5 3a2 2 0 00-2 2v6a1 1 0 102 0V5h6a1 1 0 100-2H5z" /></svg>
+                            Copiar Relatório
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border"><h3 class="text-sm font-semibold text-green-800">FATURAMENTO BRUTO</h3><p id="faturamentoBruto" class="text-2xl font-bold text-green-900">R$ 0,00</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border"><h3 class="text-sm font-semibold text-red-800">DESPESAS TOTAIS</h3><p id="despesasTotais" class="text-2xl font-bold text-red-900">R$ 0,00</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border"><h3 class="text-sm font-semibold text-blue-800">LUCRO LÍQUIDO</h3><p id="lucroLiquido" class="text-2xl font-bold text-blue-900">R$ 0,00</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border"><h3 class="text-sm font-semibold text-yellow-800">CONTAS A RECEBER</h3><p id="contasAReceber" class="text-2xl font-bold text-yellow-900">R$ 0,00</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border relative">
+                        <button id="adjustBalanceBtn" class="absolute top-2 right-2 text-gray-400 hover:text-gray-600" title="Ajustar Saldo Inicial">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <h3 class="text-sm font-semibold text-indigo-800">SALDO EM CONTA</h3>
+                        <p id="saldoEmConta" class="text-2xl font-bold text-indigo-900">R$ 0,00</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <h3 class="text-lg font-bold mb-4 text-red-800">Top 5 Despesas por Categoria</h3>
+                        <div id="topExpensesByCategory">
+                            <p class="text-sm text-gray-500">Nenhum dado no período.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <h3 class="text-lg font-bold mb-4 text-green-800">Top 5 Receitas por Categoria</h3>
+                        <div id="topIncomesByCategory">
+                            <p class="text-sm text-gray-500">Nenhum dado no período.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-sm border">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Lançamentos</h3>
+                        <div class="flex gap-2">
+                            <button id="addIncomeBtn" class="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600">+ Entrada</button>
+                            <button id="addExpenseBtn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">- Despesa</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <input type="text" id="transactionSearchInput" placeholder="Buscar por descrição..." class="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="py-2 px-4">Data</th>
+                                    <th class="py-2 px-4">Descrição</th>
+                                    <th class="py-2 px-4">Categoria</th>
+                                    <th class="py-2 px-4">Origem</th>
+                                    <th class="py-2 px-4 text-right">Valor</th>
+                                    <th class="py-2 px-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsList"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="priceTableModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter"></div>
+    <div id="orderModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter"></div>
+    <div id="viewModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter"></div>
+    <div id="infoModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[80] hidden modal-enter"></div>
+    <div id="idleModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[60] hidden modal-enter"></div>
+    <div id="optionsModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[60] hidden modal-enter"></div>
+    <div id="confirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter"></div>
+    <div id="initialBalanceModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter"></div>
+    <div id="transactionModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter"></div>
+    <div id="forgotPasswordModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter"></div>
+    <div id="cookieBanner" class="hidden fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 shadow-lg z-50 flex flex-col sm:flex-row items-center justify-center gap-4 text-center sm:text-left"></div>
+
+    <template id="partTemplate"></template>
+    <template id="comumPartContentTemplate"></template>
+    <template id="specificSizeRowTemplate"></template>
+    <template id="detalhadoPartContentTemplate"></template>
+    <template id="financialRowTemplate"></template>
+
+    <datalist id="part-type-list"></datalist>
+    <datalist id="part-material-list"></datalist>
+
+    <div id="backupReminderBanner" class="hidden fixed bottom-5 right-5 w-full max-w-sm bg-white rounded-lg shadow-lg p-4 border toast-enter z-50"></div>
+    
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
