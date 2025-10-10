@@ -9,6 +9,8 @@ const SIZES_ORDER = [
 export const DOM = {
     authContainer: document.getElementById('authContainer'),
     loginForm: document.getElementById('loginForm'),
+    loginEmail: document.getElementById('loginEmail'), // CORRIGIDO
+    loginPassword: document.getElementById('loginPassword'), // CORRIGIDO
     forgotPasswordBtn: document.getElementById('forgotPasswordBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
     userEmail: document.getElementById('userEmail'),
@@ -104,6 +106,18 @@ export const DOM = {
     cancelResetBtn: document.getElementById('cancelResetBtn'),
     cookieBanner: document.getElementById('cookieBanner'),
     cookieAcceptBtn: document.getElementById('cookieAcceptBtn'),
+    // Seletores adicionados para evitar erros futuros
+    transactionDate: document.getElementById('transactionDate'),
+    transactionDescription: document.getElementById('transactionDescription'),
+    transactionAmount: document.getElementById('transactionAmount'),
+    transactionType: document.getElementById('transactionType'),
+    transactionId: document.getElementById('transactionId'),
+    transactionStatusContainer: document.getElementById('transactionStatusContainer'),
+    pago: document.querySelector('input[name="transactionStatus"][value="pago"]'),
+    a_receber: document.querySelector('input[name="transactionStatus"][value="a_receber"]'),
+    orderId: document.getElementById('orderId'),
+    mockupFiles: document.getElementById('mockupFiles'),
+    paymentMethod: document.getElementById('paymentMethod'),
 };
 
 // Funções de Modais
@@ -635,6 +649,7 @@ export const createPriceTableRow = (item, mode) => {
     }
     return tr;
 };
+
 // Funções de Gerenciamento do Formulário de Pedidos
 export const updateFinancials = () => {
     let subtotal = 0;
