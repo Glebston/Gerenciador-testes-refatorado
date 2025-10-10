@@ -1,3 +1,4 @@
+// Importa as funções necessárias do SDK do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -12,10 +13,11 @@ const firebaseConfig = {
   appId: "1:281601947474:web:1e580dbb06b685bf5d2c8b"
 };
 
-// Inicializa os serviços do Firebase
+// Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
+
+// Inicializa os serviços do Firestore e Auth e os exporta para serem usados em outros módulos
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Exporta as instâncias para serem usadas em outros módulos da aplicação
 export { db, auth };
