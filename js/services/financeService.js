@@ -1,5 +1,5 @@
 // Importa as funções necessárias do Firestore
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Importa a instância 'db' do nosso arquivo de configuração
 import { db } from '../firebaseConfig.js';
@@ -54,6 +54,7 @@ export const initializeFinanceService = (companyId, renderCallback, getBankBalan
  * @param {string|null} transactionId - O ID da transação para atualizar, ou null para criar.
  */
 export const saveTransaction = async (transactionData, transactionId) => {
+    if (!transactionsCollection) return;
     if (transactionId) {
         await updateDoc(doc(transactionsCollection, transactionId), transactionData);
     } else {
@@ -66,6 +67,7 @@ export const saveTransaction = async (transactionData, transactionId) => {
  * @param {string} id - O ID da transação a ser excluída.
  */
 export const deleteTransaction = async (id) => {
+    if (!id || !transactionsCollection) return;
     await deleteDoc(doc(transactionsCollection, id));
 };
 
@@ -74,6 +76,7 @@ export const deleteTransaction = async (id) => {
  * @param {string} id - O ID da transação a ser atualizada.
  */
 export const markTransactionAsPaid = async (id) => {
+    if (!id || !transactionsCollection) return;
     const transactionRef = doc(transactionsCollection, id);
     await updateDoc(transactionRef, {
         status: 'pago',
@@ -95,11 +98,11 @@ export const saveInitialBalance = async (newBalance) => {
 };
 
 /**
- * Retorna a lista completa de todas as transações do cache local.
+ * Retorna uma cópia da lista completa de todas as transações do cache local.
  * @returns {Array}
  */
 export const getAllTransactions = () => {
-    return allTransactions;
+    return [...allTransactions]; // Retorna cópia para segurança (imutabilidade)
 };
 
 /**
