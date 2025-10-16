@@ -46,30 +46,30 @@ export const sortSizes = (sizesObject) => {
 // --- Lógica do Timer de Inatividade ---
 
 let idleTimeout, countdownInterval;
-let DOM_UTILS, logoutHandler_UTILS; // Referências internas para evitar dependências diretas
+let domElements, logoutHandlerCallback; // Dependências injetadas
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000; 
 const COUNTDOWN_SECONDS = 60;
 
 const startCountdown = () => {
-    DOM_UTILS.idleModal.classList.remove('hidden');
+    domElements.idleModal.classList.remove('hidden');
     let secondsLeft = COUNTDOWN_SECONDS;
-    DOM_UTILS.countdownTimer.textContent = secondsLeft;
+    domElements.countdownTimer.textContent = secondsLeft;
     countdownInterval = setInterval(() => {
         secondsLeft--;
-        DOM_UTILS.countdownTimer.textContent = secondsLeft;
+        domElements.countdownTimer.textContent = secondsLeft;
         if (secondsLeft <= 0) {
             clearInterval(countdownInterval);
-            if (logoutHandler_UTILS) logoutHandler_UTILS();
+            if (logoutHandlerCallback) logoutHandlerCallback();
         }
     }, 1000);
 };
 
 export const resetIdleTimer = () => {
-    if (!DOM_UTILS || !logoutHandler_UTILS) return; // Não executa se não for inicializado
+    if (!domElements || !logoutHandlerCallback) return; // Não executa se não for inicializado
     clearTimeout(idleTimeout);
     clearInterval(countdownInterval);
-    DOM_UTILS.idleModal.classList.add('hidden');
+    domElements.idleModal.classList.add('hidden');
     idleTimeout = setTimeout(startCountdown, IDLE_TIMEOUT_MS);
 };
 
@@ -79,15 +79,16 @@ export const resetIdleTimer = () => {
  * @param {function} logoutHandler - A função de logout a ser chamada quando o tempo esgotar.
  */
 export const initializeIdleTimer = (dom, logoutHandler) => {
-    DOM_UTILS = dom;
-    logoutHandler_UTILS = logoutHandler;
+    domElements = dom;
+    logoutHandlerCallback = logoutHandler;
     
-    // Adiciona o listener ao botão "Continuar Ativo"
-    DOM_UTILS.stayLoggedInBtn.addEventListener('click', resetIdleTimer);
+    domElements.stayLoggedInBtn.addEventListener('click', resetIdleTimer);
 
     // Inicia o timer pela primeira vez
     resetIdleTimer();
 };
+
+
 // --- Funções de Geração de PDF ---
 
 /**
@@ -98,6 +99,12 @@ export const initializeIdleTimer = (dom, logoutHandler) => {
  * @param {function} showInfoModal - A função para exibir modais de informação.
  */
 export const generateComprehensivePdf = async (orderId, allOrders, userCompanyName, showInfoModal) => {
+    // **AJUSTE DE ROBUSTEZ:** Verifica se a biblioteca jsPDF foi carregada
+    if (typeof window.jspdf === 'undefined') {
+        showInfoModal("Erro: A biblioteca de PDF não pôde ser carregada. Verifique sua conexão com a internet.");
+        return;
+    }
+
     showInfoModal("Iniciando geração do PDF...");
     const order = allOrders.find(o => o.id === orderId);
     if (!order) {
@@ -300,7 +307,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
                     if (yPosition > 280) { doc.addPage(); yPosition = MARGIN; }
                     doc.setFontSize(9);
                     doc.setTextColor(150);
-                    doc.text(`- Não foi possível carregar a imagem: ${url}`, MARGIN, yPosition);
+                    doc.text(`- Não foi possível carregar a imagem.`, MARGIN, yPosition);
                     yPosition += 5;
                     doc.setTextColor(0);
                 }
@@ -323,6 +330,12 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
  * @param {function} showInfoModal - A função para exibir modais de informação.
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
+    // **AJUSTE DE ROBUSTEZ:** Verifica se a biblioteca jsPDF foi carregada
+    if (typeof window.jspdf === 'undefined') {
+        showInfoModal("Erro: A biblioteca de PDF não pôde ser carregada. Verifique sua conexão com a internet.");
+        return;
+    }
+    
     let totalValue = 0;
     (orderData.parts || []).forEach(p => {
         const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
