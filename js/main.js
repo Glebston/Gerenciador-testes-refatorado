@@ -597,8 +597,7 @@ UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
     }
 });
 
-// **NOVO BLOCO ADICIONADO**
-// --- Listener Global de Teclado para Atalhos ---
+// --- Listener Global de Teclado para Atalhos (CORREÇÃO) ---
 document.addEventListener('keydown', (event) => {
     // Atalho para confirmação (Enter)
     if (event.key === 'Enter') {
