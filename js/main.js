@@ -151,25 +151,21 @@ const handleBackup = () => {
 
 const processRestore = async (ordersToRestore, transactionsToRestore) => {
     const choice = await UI.showConfirmModal("Escolha o modo de importação:", "Adicionar aos existentes", "Substituir tudo");
-    if (choice === null) return; // CORRIGIDO: Checagem explícita de cancelamento
+    if (choice === null) return;
     UI.showInfoModal("Restaurando dados... Por favor, aguarde.");
     if (choice) {
-        // Modo: Adicionar aos existentes
         const batch = writeBatch(db);
         ordersToRestore.forEach(order => batch.set(doc(collection(db, `companies/${userCompanyId}/orders`)), order));
         transactionsToRestore.forEach(t => batch.set(doc(collection(db, `companies/${userCompanyId}/transactions`)), t));
         await batch.commit();
         UI.showInfoModal(`${ordersToRestore.length} pedido(s) e ${transactionsToRestore.length} lançamento(s) foram ADICIONADOS.`);
     } else {
-        // Modo: Substituir tudo
         const confirmReplace = await UI.showConfirmModal("ATENÇÃO: Isto vai APAGAR TODOS os dados atuais. A ação NÃO PODE SER DESFEITA. Continuar?", "Sim, substituir tudo", "Cancelar");
         if (confirmReplace) {
-            // Etapa 1: Deletar todos os dados existentes
             const deleteBatch = writeBatch(db);
             getAllOrders().forEach(o => deleteBatch.delete(doc(db, `companies/${userCompanyId}/orders`, o.id)));
             getAllTransactions().forEach(t => deleteBatch.delete(doc(db, `companies/${userCompanyId}/transactions`, t.id)));
             await deleteBatch.commit();
-            // Etapa 2: Adicionar os novos dados
             const addBatch = writeBatch(db);
             ordersToRestore.forEach(order => addBatch.set(doc(collection(db, `companies/${userCompanyId}/orders`)), order));
             transactionsToRestore.forEach(t => addBatch.set(doc(collection(db, `companies/${userCompanyId}/transactions`)), t));
@@ -186,7 +182,6 @@ const handleRestore = (event) => {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            // VALIDAÇÃO: Garante que o objeto de backup tem as propriedades esperadas
             if (typeof data !== 'object' || data === null || (!data.orders && !data.transactions)) {
                  UI.showInfoModal("Arquivo de backup inválido ou em formato incorreto.");
                  return;
@@ -222,8 +217,6 @@ const checkBackupReminder = () => {
     }
 };
 
-// **CORRIGIDO E MELHORADO:** A lógica de coleta de formulário foi movida para o service de pedidos,
-// mas por enquanto, mantemos aqui para a correção, melhorando a legibilidade.
 const collectFormData = () => {
     const data = {
         clientName: UI.DOM.clientName.value, clientPhone: UI.DOM.clientPhone.value, orderStatus: UI.DOM.orderStatus.value,
@@ -456,14 +449,11 @@ UI.DOM.addExpenseBtn.addEventListener('click', () => {
 
 UI.DOM.transactionForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    // **CORRIGIDO:** Lógica de coleta e validação mais clara e robusta
     const selectedSourceEl = UI.DOM.transactionSourceContainer.querySelector('.source-selector.active');
     if (!selectedSourceEl) {
         UI.showInfoModal("Por favor, selecione a Origem (Banco ou Caixa).");
         return;
     }
-
     const data = {
         date: UI.DOM.transactionDate.value,
         description: UI.DOM.transactionDescription.value,
@@ -475,13 +465,10 @@ UI.DOM.transactionForm.addEventListener('submit', async (e) => {
             ? (UI.DOM.a_receber.checked ? 'a_receber' : 'pago') 
             : 'pago'
     };
-
     if (!data.date || !data.description || isNaN(data.amount) || data.amount <= 0) {
         UI.showInfoModal("Por favor, preencha todos os campos com valores válidos.");
         return;
     }
-
-    // **CORRIGIDO:** Reintrodução do bloco try...catch para tratamento de erros
     try {
         await saveTransaction(data, UI.DOM.transactionId.value);
         UI.DOM.transactionModal.classList.add('hidden');
@@ -512,7 +499,7 @@ UI.DOM.periodFilter.addEventListener('change', () => {
 });
 
 [UI.DOM.startDateInput, UI.DOM.endDateInput, UI.DOM.transactionSearchInput].forEach(element => {
-    element.addEventListener('input', () => UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig));
+    if(element) element.addEventListener('input', () => UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig));
 });
 
 UI.DOM.adjustBalanceBtn.addEventListener('click', () => {
@@ -581,10 +568,9 @@ UI.DOM.savePriceTableBtn.addEventListener('click', async () => {
                 description: row.querySelector('.price-item-desc').value.trim(), 
                 price: parseFloat(row.querySelector('.price-item-price').value) || 0
             }))
-            .filter(item => item.name); // Salva apenas itens que têm um nome
+            .filter(item => item.name);
 
         await savePriceTableChanges(itemsToSave);
-        // A atualização da UI será feita automaticamente pelo listener do pricingService
     } catch (error) {
         console.error("Erro ao salvar tabela de preços:", error);
         UI.showInfoModal("Não foi possível salvar as alterações.");
@@ -608,5 +594,69 @@ UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.source-selector');
     if (target) {
         UI.updateSourceSelectionUI(target.dataset.source);
+    }
+});
+
+// **NOVO BLOCO ADICIONADO**
+// --- Listener Global de Teclado para Atalhos ---
+document.addEventListener('keydown', (event) => {
+    // Atalho para confirmação (Enter)
+    if (event.key === 'Enter') {
+        // Confirma Ação (ex: Excluir)
+        if (!UI.DOM.confirmModal.classList.contains('hidden')) {
+            UI.DOM.confirmOkBtn.click();
+            event.preventDefault(); // Previne o comportamento padrão do Enter
+        } 
+        // Salva Saldo Inicial
+        else if (!UI.DOM.initialBalanceModal.classList.contains('hidden')) {
+            UI.DOM.saveBalanceBtn.click();
+            event.preventDefault();
+        } 
+        // Envia E-mail de Redefinição de Senha
+        else if (!UI.DOM.forgotPasswordModal.classList.contains('hidden')) {
+            UI.DOM.sendResetEmailBtn.click();
+            event.preventDefault();
+        } 
+        // Fecha Modal de Informação
+        else if (!UI.DOM.infoModal.classList.contains('hidden')) {
+            UI.DOM.infoModalCloseBtn.click();
+        }
+    }
+
+    // Atalho para cancelamento/fechamento (Escape)
+    if (event.key === 'Escape') {
+        // A ordem aqui é importante, dos modais mais "altos" para os mais "baixos"
+        if (!UI.DOM.confirmModal.classList.contains('hidden')) {
+            UI.DOM.confirmCancelBtn.click();
+        } 
+        else if (!UI.DOM.initialBalanceModal.classList.contains('hidden')) {
+            UI.DOM.cancelBalanceBtn.click();
+        } 
+        else if (!UI.DOM.forgotPasswordModal.classList.contains('hidden')) {
+            UI.DOM.cancelResetBtn.click();
+        } 
+        else if (!UI.DOM.viewModal.classList.contains('hidden')) {
+            document.getElementById('closeViewBtn')?.click();
+        } 
+        else if (!UI.DOM.orderModal.classList.contains('hidden')) {
+            UI.DOM.cancelBtn.click();
+        } 
+        else if (!UI.DOM.priceTableModal.classList.contains('hidden')) {
+            // Se o botão 'Cancelar' (modo de edição) estiver visível, clica nele. Senão, clica em 'Fechar'.
+            if (!UI.DOM.cancelPriceTableBtn.classList.contains('hidden')) {
+                UI.DOM.cancelPriceTableBtn.click();
+            } else {
+                UI.DOM.closePriceTableBtn.click();
+            }
+        }
+        else if (!UI.DOM.transactionModal.classList.contains('hidden')) {
+            UI.DOM.cancelTransactionBtn.click();
+        }
+        else if (!UI.DOM.optionsModal.classList.contains('hidden')) {
+            UI.DOM.closeOptionsModalBtn.click();
+        }
+        else if (!UI.DOM.infoModal.classList.contains('hidden')) {
+            UI.DOM.infoModalCloseBtn.click();
+        }
     }
 });
