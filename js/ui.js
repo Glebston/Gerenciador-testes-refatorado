@@ -9,8 +9,8 @@ const SIZES_ORDER = [
 export const DOM = {
     authContainer: document.getElementById('authContainer'),
     loginForm: document.getElementById('loginForm'),
-    loginEmail: document.getElementById('loginEmail'), // CORRIGIDO
-    loginPassword: document.getElementById('loginPassword'), // CORRIGIDO
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
     forgotPasswordBtn: document.getElementById('forgotPasswordBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
     userEmail: document.getElementById('userEmail'),
@@ -106,7 +106,6 @@ export const DOM = {
     cancelResetBtn: document.getElementById('cancelResetBtn'),
     cookieBanner: document.getElementById('cookieBanner'),
     cookieAcceptBtn: document.getElementById('cookieAcceptBtn'),
-    // Seletores adicionados para evitar erros futuros
     transactionDate: document.getElementById('transactionDate'),
     transactionDescription: document.getElementById('transactionDescription'),
     transactionAmount: document.getElementById('transactionAmount'),
@@ -118,6 +117,14 @@ export const DOM = {
     orderId: document.getElementById('orderId'),
     mockupFiles: document.getElementById('mockupFiles'),
     paymentMethod: document.getElementById('paymentMethod'),
+    clientName: document.getElementById('clientName'),
+    clientPhone: document.getElementById('clientPhone'),
+    orderStatus: document.getElementById('orderStatus'),
+    orderDate: document.getElementById('orderDate'),
+    deliveryDate: document.getElementById('deliveryDate'),
+    generalObservation: document.getElementById('generalObservation'),
+    existingFilesContainer: document.getElementById('existingFilesContainer'),
+    modalTitle: document.getElementById('modalTitle'),
 };
 
 // Funções de Modais
@@ -384,7 +391,7 @@ export const viewOrder = (order) => {
                 <td class="py-1 px-2 border">${p.material}</td>
                 <td class="py-1 px-2 border">${p.colorMain}</td>
                 <td class="py-1 px-2 border text-center">${standardQty + specificQty + detailedQty}</td>
-                <td class="py-1 px-2 border text-right">${unitPriceHtml}</td>
+                <td class="py-1 px-2 border text-right">${unitPriceHtml.trim()}</td>
                 <td class="py-1 px-2 border text-right font-semibold">R$ ${partSubtotal.toFixed(2)}</td>
             </tr>`;
     }).join('');
@@ -819,7 +826,6 @@ export const addPart = (partData = {}, partCounter) => {
     
     renderFinancialSection();
     
-    // Listeners são adicionados aqui para manter o escopo
     partItem.querySelector('.remove-part-btn').addEventListener('click', () => {
         partItem.remove();
         renderFinancialSection();
@@ -836,32 +842,31 @@ export const addPart = (partData = {}, partCounter) => {
 
 export const resetForm = () => {
     DOM.orderForm.reset();
-    document.getElementById('orderId').value = '';
-    document.getElementById('modalTitle').textContent = 'Novo Pedido';
+    DOM.orderId.value = '';
+    DOM.modalTitle.textContent = 'Novo Pedido';
     DOM.partsContainer.innerHTML = '';
     DOM.financialsContainer.innerHTML = '';
-    document.getElementById('existingFilesContainer').innerHTML = '';
-    document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
+    DOM.existingFilesContainer.innerHTML = '';
+    DOM.orderDate.value = new Date().toISOString().split('T')[0];
     updateFinancials();
 };
 
 export const populateFormForEdit = (orderData, currentPartCounter) => {
     resetForm();
     
-    document.getElementById('orderId').value = orderData.id;
-    document.getElementById('modalTitle').textContent = 'Editar Pedido';
-    document.getElementById('clientName').value = orderData.clientName;
-    document.getElementById('clientPhone').value = orderData.clientPhone;
-    document.getElementById('orderStatus').value = orderData.orderStatus;
-    document.getElementById('orderDate').value = orderData.orderDate;
-    document.getElementById('deliveryDate').value = orderData.deliveryDate;
-    document.getElementById('generalObservation').value = orderData.generalObservation;
+    DOM.orderId.value = orderData.id;
+    DOM.modalTitle.textContent = 'Editar Pedido';
+    DOM.clientName.value = orderData.clientName;
+    DOM.clientPhone.value = orderData.clientPhone;
+    DOM.orderStatus.value = orderData.orderStatus;
+    DOM.orderDate.value = orderData.orderDate;
+    DOM.deliveryDate.value = orderData.deliveryDate;
+    DOM.generalObservation.value = orderData.generalObservation;
     DOM.downPayment.value = orderData.downPayment || '';
     DOM.discount.value = orderData.discount || '';
-    document.getElementById('paymentMethod').value = orderData.paymentMethod || '';
+    DOM.paymentMethod.value = orderData.paymentMethod || '';
 
-    const filesContainer = document.getElementById('existingFilesContainer');
-    filesContainer.innerHTML = '';
+    DOM.existingFilesContainer.innerHTML = '';
     if (orderData.mockupUrls && orderData.mockupUrls.length) {
         orderData.mockupUrls.forEach(url => {
             const fileWrapper = document.createElement('div');
@@ -881,7 +886,7 @@ export const populateFormForEdit = (orderData, currentPartCounter) => {
 
             fileWrapper.appendChild(link);
             fileWrapper.appendChild(deleteBtn);
-            filesContainer.appendChild(fileWrapper);
+            DOM.existingFilesContainer.appendChild(fileWrapper);
         });
     }
 
