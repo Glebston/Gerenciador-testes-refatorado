@@ -1,5 +1,5 @@
 // ========================================================
-// PARTE 1: IMPORTAÇÕES DE MÓDULOS
+// PARTE 1: IMPORTAÇÕES DE MÓDUTO
 // ========================================================
 
 // Firebase Core & Config
@@ -420,6 +420,13 @@ UI.DOM.cancelBtn.addEventListener('click', () => UI.DOM.orderModal.classList.add
 UI.DOM.addPartBtn.addEventListener('click', () => { partCounter++; UI.addPart({}, partCounter); });
 UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
 UI.DOM.discount.addEventListener('input', UI.updateFinancials);
+
+// **NOVO LISTENER ADICIONADO ABAIXO**
+UI.DOM.clientPhone.addEventListener('input', (e) => {
+  e.target.value = UI.formatPhoneNumber(e.target.value);
+});
+// **FIM DO NOVO LISTENER**
+
 UI.DOM.partsContainer.addEventListener('click', (e) => { 
     const btn = e.target.closest('button.manage-options-btn'); 
     if (btn) { 
