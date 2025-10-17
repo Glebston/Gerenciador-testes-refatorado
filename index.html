@@ -38,7 +38,7 @@
             <div class="w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                 <div class="flex items-center">
                     <img src="https://i.ibb.co/BHq1HsPG/2-removebg-preview.png" alt="Logo" class="h-8 w-auto mr-3">
-                    <h1 class="text-xl font-bold text-gray-900">Gerenciador de Pedidos1</h1>
+                    <h1 class="text-xl font-bold text-gray-900">Gerenciador de Pedidos</h1>
                 </div>
                 <div class="flex items-center gap-4">
                     <button id="priceTableBtn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-gray-300 transition duration-300 flex items-center justify-center" title="Tabela de Preços">
@@ -186,8 +186,7 @@
                     <legend class="text-lg font-semibold px-2">1. Dados do Cliente e Datas</legend>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
                         <input type="text" id="clientName" placeholder="Nome do Cliente" class="p-2 border rounded-md w-full col-span-1 sm:col-span-2 lg:col-span-2" required>
-                        <input type="text" id="clientPhone" placeholder="Telefone" class="p-2 border rounded-md w-full">
-                        <select id="orderStatus" class="p-2 border rounded-md w-full bg-white">
+                        <input type="text" id="clientPhone" placeholder="Telefone" class="p-2 border rounded-md w-full" maxlength="15"> <select id="orderStatus" class="p-2 border rounded-md w-full bg-white">
                             <option value="Pendente">Pendente</option>
                             <option value="Confirmado">Confirmado</option>
                             <option value="Em Produção">Em Produção</option>
@@ -489,8 +488,3 @@
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
-
-
-
-
-
