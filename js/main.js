@@ -366,6 +366,39 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
           });
     } else if (btn.classList.contains('view-btn')) {
         UI.viewOrder(order);
+    } else if (btn.classList.contains('settle-and-deliver-btn')) {
+        UI.showConfirmModal(
+            "Tem certeza de que deseja quitar e marcar este pedido como 'Entregue'?",
+            "Sim, Quitar e Entregar",
+            "Cancelar"
+        ).then(confirmed => {
+            if (confirmed) {
+                let totalValue = 0;
+                (order.parts || []).forEach(p => {
+                    const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
+                    const specificQty = (p.specifics || []).length;
+                    const detailedQty = (p.details || []).length;
+                    const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
+                    const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+                    const detailedSub = detailedQty * (p.unitPrice || 0);
+                    totalValue += standardSub + specificSub + detailedSub;
+                });
+                totalValue -= (order.discount || 0);
+
+                const updatedOrder = { ...order };
+                updatedOrder.downPayment = totalValue;
+                updatedOrder.orderStatus = 'Entregue';
+
+                saveOrder(updatedOrder, id)
+                    .then(() => {
+                        UI.showInfoModal("Pedido quitado e movido para 'Entregues' com sucesso!");
+                    })
+                    .catch(error => {
+                        console.error("Erro ao quitar e entregar pedido:", error);
+                        UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
+                    });
+            }
+        });
     }
 });
 
@@ -597,7 +630,7 @@ UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
     }
 });
 
-// --- Listener Global de Teclado para Atalhos (CORREÇÃO) ---
+// --- Listener Global de Teclado para Atalhos ---
 document.addEventListener('keydown', (event) => {
     // Atalho para confirmação (Enter)
     if (event.key === 'Enter') {
