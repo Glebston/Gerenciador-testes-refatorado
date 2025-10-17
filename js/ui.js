@@ -220,9 +220,11 @@ const generateOrderCardHTML = (order, viewType) => {
     (order.parts || []).forEach(p => {
         const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
         const specificQty = (p.specifics || []).length;
-        const standardSub = standardQty * (p.unitPriceStandard || p.unitPrice || 0);
-        const specificSub = specificQty * (p.unitPriceSpecific || p.unitPrice || 0);
-        totalValue += standardSub + specificSub;
+        const detailedQty = (p.details || []).length;
+        const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
+        const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+        const detailedSub = detailedQty * (p.unitPrice || 0);
+        totalValue += standardSub + specificSub + detailedSub;
     });
     totalValue -= (order.discount || 0);
 
@@ -265,6 +267,10 @@ const generateOrderCardHTML = (order, viewType) => {
             <div class="flex space-x-2 items-center pt-3 border-t border-gray-100 mt-auto">
                 <button data-id="${order.id}" class="view-btn flex-1 bg-gray-100 text-gray-700 font-semibold py-2 px-3 rounded-lg text-sm hover:bg-gray-200 transition-colors">Detalhes</button>
                 ${buttonsHtml}
+                ${viewType === 'pending' ? 
+                `<button data-id="${order.id}" class="settle-and-deliver-btn p-2 rounded-md text-gray-500 hover:bg-green-100 hover:text-green-700 transition-colors" title="Quitar e Entregar">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                </button>` : ''}
                 <button data-id="${order.id}" class="delete-btn p-2 rounded-md text-gray-500 hover:bg-red-100 hover:text-red-700 transition-colors" title="Excluir">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
                 </button>
