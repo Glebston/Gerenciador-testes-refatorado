@@ -420,12 +420,56 @@ UI.DOM.cancelBtn.addEventListener('click', () => UI.DOM.orderModal.classList.add
 UI.DOM.addPartBtn.addEventListener('click', () => { partCounter++; UI.addPart({}, partCounter); });
 UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
 UI.DOM.discount.addEventListener('input', UI.updateFinancials);
-
-// **NOVO LISTENER ADICIONADO ABAIXO**
 UI.DOM.clientPhone.addEventListener('input', (e) => {
   e.target.value = UI.formatPhoneNumber(e.target.value);
 });
-// **FIM DO NOVO LISTENER**
+
+// ===========================================================================
+// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO BASE
+// ===========================================================================
+UI.DOM.partsContainer.addEventListener('focusout', (e) => {
+    // Verifica se o evento foi disparado por um campo 'Tipo da Peça'
+    if (e.target.classList.contains('part-type')) {
+        const partItem = e.target.closest('.part-item');
+        if (!partItem) return;
+
+        const partId = partItem.dataset.partId;
+        const partName = e.target.value.trim();
+
+        if (!partName) return; // Se o campo estiver vazio, não faz nada
+
+        // Busca o item na tabela de preços (cache)
+        const allPricingItems = getAllPricingItems();
+        const matchedItem = allPricingItems.find(item => item.name.toLowerCase() === partName.toLowerCase());
+
+        if (matchedItem) {
+            // Encontrou um item correspondente
+            
+            // Tenta encontrar o campo de preço 'Padrão' (comum)
+            let targetPriceInput = UI.DOM.financialsContainer.querySelector(
+                `.financial-item[data-part-id="${partId}"][data-price-group="standard"] .financial-price`
+            );
+
+            // Se não achar (ex: for tipo 'Detalhado'), tenta encontrar o campo 'Detalhado'
+            if (!targetPriceInput) {
+                targetPriceInput = UI.DOM.financialsContainer.querySelector(
+                    `.financial-item[data-part-id="${partId}"][data-price-group="detailed"] .financial-price`
+                );
+            }
+
+            // Se encontrou um campo de preço, preenche o valor base
+            if (targetPriceInput) {
+                targetPriceInput.value = (matchedItem.price || 0).toFixed(2);
+                
+                // Atualiza os totais do pedido
+                UI.updateFinancials();
+            }
+        }
+    }
+});
+// ===========================================================================
+// FIM DA NOVA FUNCIONALIDADE
+// ===========================================================================
 
 UI.DOM.partsContainer.addEventListener('click', (e) => { 
     const btn = e.target.closest('button.manage-options-btn'); 
