@@ -22,10 +22,9 @@ const setupPricingListener = (granularUpdateCallback) => {
     unsubscribeListener = onSnapshot(q, (snapshot) => {
         
         snapshot.docChanges().forEach((change) => {
-            // Ignora eventos que vêm do cache local
-            if (change.doc.metadata.hasPendingWrites) {
-                return;
-            }
+            // --- CORREÇÃO: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
+            // Isso garante que a tabela de preços se atualize
+            // imediatamente após o usuário salvar as alterações.
 
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allPricingItems.findIndex(p => p.id === data.id);
@@ -40,6 +39,8 @@ const setupPricingListener = (granularUpdateCallback) => {
             } else if (change.type === 'modified') {
                 if (index > -1) {
                     allPricingItems[index] = data; // Atualiza o item no cache
+                } else {
+                    allPricingItems.push(data); // Adiciona se não existia
                 }
             } else if (change.type === 'removed') {
                 if (index > -1) {
