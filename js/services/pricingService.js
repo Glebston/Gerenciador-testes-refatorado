@@ -22,7 +22,7 @@ const setupPricingListener = (granularUpdateCallback) => {
     unsubscribeListener = onSnapshot(q, (snapshot) => {
         
         snapshot.docChanges().forEach((change) => {
-            // --- CORREÇÃO: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
+            // --- CORREÇÃO v4.2: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
             // Isso garante que a tabela de preços se atualize
             // imediatamente após o usuário salvar as alterações.
 
