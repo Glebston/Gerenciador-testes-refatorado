@@ -379,7 +379,7 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                     const specificQty = (p.specifics || []).length;
                     const detailedQty = (p.details || []).length;
                     const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
-                    const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+                    const specificSub = standardQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
                     const detailedSub = detailedQty * (p.unitPrice || 0);
                     totalValue += standardSub + specificSub + detailedSub;
                 });
@@ -425,25 +425,39 @@ UI.DOM.clientPhone.addEventListener('input', (e) => {
 });
 
 // ===========================================================================
-// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO BASE
+// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO COMPOSTO (v2)
 // ===========================================================================
-UI.DOM.partsContainer.addEventListener('focusout', (e) => {
-    // Verifica se o evento foi disparado por um campo 'Tipo da Peça'
-    if (e.target.classList.contains('part-type')) {
+UI.DOM.partsContainer.addEventListener('change', (e) => {
+    // Evento 'change' lida bem com <datalist> e digitação manual.
+    
+    // Verifica se o evento foi disparado por um campo de tipo ou material
+    if (e.target.classList.contains('part-type') || e.target.classList.contains('part-material')) {
         const partItem = e.target.closest('.part-item');
         if (!partItem) return;
 
         const partId = partItem.dataset.partId;
-        const partName = e.target.value.trim();
+        
+        // Pega os valores de AMBOS os campos
+        const partName = (partItem.querySelector('.part-type').value || '').trim();
+        const partMaterial = (partItem.querySelector('.part-material').value || '').trim();
 
-        if (!partName) return; // Se o campo estiver vazio, não faz nada
+        // Só prossegue se ambos os campos estiverem preenchidos
+        if (!partName || !partMaterial) {
+            return;
+        }
 
         // Busca o item na tabela de preços (cache)
         const allPricingItems = getAllPricingItems();
-        const matchedItem = allPricingItems.find(item => item.name.toLowerCase() === partName.toLowerCase());
+        const partNameLower = partName.toLowerCase();
+        const partMaterialLower = partMaterial.toLowerCase();
+
+        const matchedItem = allPricingItems.find(item => 
+            item.name.toLowerCase() === partNameLower && 
+            (item.description || '').toLowerCase() === partMaterialLower
+        );
 
         if (matchedItem) {
-            // Encontrou um item correspondente
+            // Encontrou um item correspondente (Item + Descrição/Material)
             
             // Tenta encontrar o campo de preço 'Padrão' (comum)
             let targetPriceInput = UI.DOM.financialsContainer.querySelector(
@@ -457,7 +471,7 @@ UI.DOM.partsContainer.addEventListener('focusout', (e) => {
                 );
             }
 
-            // Se encontrou um campo de preço, preenche o valor base
+            // Se encontrou um campo de preço, preenche o valor base (editável)
             if (targetPriceInput) {
                 targetPriceInput.value = (matchedItem.price || 0).toFixed(2);
                 
