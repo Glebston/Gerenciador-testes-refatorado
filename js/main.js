@@ -379,7 +379,7 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                     const specificQty = (p.specifics || []).length;
                     const detailedQty = (p.details || []).length;
                     const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
-                    const specificSub = standardQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+                    const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
                     const detailedSub = detailedQty * (p.unitPrice || 0);
                     totalValue += standardSub + specificSub + detailedSub;
                 });
@@ -420,70 +420,12 @@ UI.DOM.cancelBtn.addEventListener('click', () => UI.DOM.orderModal.classList.add
 UI.DOM.addPartBtn.addEventListener('click', () => { partCounter++; UI.addPart({}, partCounter); });
 UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
 UI.DOM.discount.addEventListener('input', UI.updateFinancials);
+
+// **NOVO LISTENER ADICIONADO ABAIXO**
 UI.DOM.clientPhone.addEventListener('input', (e) => {
   e.target.value = UI.formatPhoneNumber(e.target.value);
 });
-
-// ===========================================================================
-// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO COMPOSTO (v3 - Final)
-// ===========================================================================
-// Evento 'input' garante reatividade instantânea com <datalist> e digitação.
-UI.DOM.partsContainer.addEventListener('input', (e) => {
-    
-    // Verifica se o evento foi disparado por um campo de tipo ou material
-    if (e.target.classList.contains('part-type') || e.target.classList.contains('part-material')) {
-        const partItem = e.target.closest('.part-item');
-        if (!partItem) return;
-
-        const partId = partItem.dataset.partId;
-        
-        // Pega os valores de AMBOS os campos
-        const partName = (partItem.querySelector('.part-type').value || '').trim();
-        const partMaterial = (partItem.querySelector('.part-material').value || '').trim();
-
-        // Só prossegue se ambos os campos estiverem preenchidos
-        if (!partName || !partMaterial) {
-            return;
-        }
-
-        // Busca o item na tabela de preços (cache)
-        const allPricingItems = getAllPricingItems();
-        const partNameLower = partName.toLowerCase();
-        const partMaterialLower = partMaterial.toLowerCase();
-
-        const matchedItem = allPricingItems.find(item => 
-            item.name.toLowerCase() === partNameLower && 
-            (item.description || '').toLowerCase() === partMaterialLower
-        );
-
-        if (matchedItem) {
-            // Encontrou um item correspondente (Item + Descrição/Material)
-            
-            // Tenta encontrar o campo de preço 'Padrão' (comum)
-            let targetPriceInput = UI.DOM.financialsContainer.querySelector(
-                `.financial-item[data-part-id="${partId}"][data-price-group="standard"] .financial-price`
-            );
-
-            // Se não achar (ex: for tipo 'Detalhado'), tenta encontrar o campo 'Detalhado'
-            if (!targetPriceInput) {
-                targetPriceInput = UI.DOM.financialsContainer.querySelector(
-                    `.financial-item[data-part-id="${partId}"][data-price-group="detailed"] .financial-price`
-                );
-            }
-
-            // Se encontrou um campo de preço, preenche o valor base (editável)
-            if (targetPriceInput) {
-                targetPriceInput.value = (matchedItem.price || 0).toFixed(2);
-                
-                // Atualiza os totais do pedido
-                UI.updateFinancials();
-            }
-        }
-    }
-});
-// ===========================================================================
-// FIM DA NOVA FUNCIONALIDADE
-// ===========================================================================
+// **FIM DO NOVO LISTENER**
 
 UI.DOM.partsContainer.addEventListener('click', (e) => { 
     const btn = e.target.closest('button.manage-options-btn'); 
@@ -699,7 +641,7 @@ UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
 document.addEventListener('keydown', (event) => {
     // Atalho para confirmação (Enter)
     if (event.key === 'Enter') {
-        // Confirma Ação (ex: Exclir)
+        // Confirma Ação (ex: Excluir)
         if (!UI.DOM.confirmModal.classList.contains('hidden')) {
             UI.DOM.confirmOkBtn.click();
             event.preventDefault(); // Previne o comportamento padrão do Enter
@@ -757,3 +699,4 @@ document.addEventListener('keydown', (event) => {
         }
     }
 });
+
