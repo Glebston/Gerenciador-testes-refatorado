@@ -23,10 +23,9 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
     unsubscribeListener = onSnapshot(q, (snapshot) => {
         
         snapshot.docChanges().forEach((change) => {
-            // Ignora eventos que vêm do cache local (evita "ecos" de nossas próprias gravações)
-            if (change.doc.metadata.hasPendingWrites) {
-                return;
-            }
+            // --- CORREÇÃO: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
+            // Isso garante que o listener processe *todas* as mudanças,
+            // incluindo as iniciadas pelo próprio cliente (como "Quitar e Entregar").
 
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allOrders.findIndex(o => o.id === data.id);
@@ -39,6 +38,9 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
             } else if (change.type === 'modified') {
                 if (index > -1) {
                     allOrders[index] = data; // Atualiza o item no cache
+                } else {
+                    // Se não existia (raro, mas pode acontecer em 'modified'), adiciona
+                    allOrders.push(data);
                 }
             } else if (change.type === 'removed') {
                 if (index > -1) {
