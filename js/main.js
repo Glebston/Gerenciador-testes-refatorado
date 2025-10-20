@@ -425,10 +425,10 @@ UI.DOM.clientPhone.addEventListener('input', (e) => {
 });
 
 // ===========================================================================
-// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO COMPOSTO (v2)
+// INÍCIO DA NOVA FUNCIONALIDADE: AUTOPREENCHIMENTO DE PREÇO COMPOSTO (v3 - Final)
 // ===========================================================================
-UI.DOM.partsContainer.addEventListener('change', (e) => {
-    // Evento 'change' lida bem com <datalist> e digitação manual.
+// Evento 'input' garante reatividade instantânea com <datalist> e digitação.
+UI.DOM.partsContainer.addEventListener('input', (e) => {
     
     // Verifica se o evento foi disparado por um campo de tipo ou material
     if (e.target.classList.contains('part-type') || e.target.classList.contains('part-material')) {
@@ -699,7 +699,7 @@ UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
 document.addEventListener('keydown', (event) => {
     // Atalho para confirmação (Enter)
     if (event.key === 'Enter') {
-        // Confirma Ação (ex: Excluir)
+        // Confirma Ação (ex: Exclir)
         if (!UI.DOM.confirmModal.classList.contains('hidden')) {
             UI.DOM.confirmOkBtn.click();
             event.preventDefault(); // Previne o comportamento padrão do Enter
