@@ -125,31 +125,55 @@ onAuthStateChanged(auth, (user) => {
  * @param {string} viewType - O 'currentOrdersView' ('pending' ou 'delivered')
  */
 const handleOrderChange = (type, order, viewType) => {
+    // --- CORREÇÃO v4.2.1: Lógica de Roteamento ---
+    
     const isDelivered = order.orderStatus === 'Entregue';
-    
-    // Lógica para decidir se a UI deve ser atualizada com base na view atual
-    if (
-        (viewType === 'pending' && isDelivered && type !== 'modified') || // Ignora 'added'/'removed' de entregues na view pendente
-        (viewType === 'delivered' && !isDelivered) // Ignora qualquer coisa de não-entregues na view entregue
-    ) {
-        // Se um pedido foi modificado DE pendente PARA entregue na view pendente, remova-o
-        if (type === 'modified' && viewType === 'pending' && isDelivered) {
+
+    // Rota 1: Estamos na view 'pending'
+    if (viewType === 'pending') {
+        // Se o pedido foi marcado como 'Entregue' (vindo de 'added' ou 'modified')
+        if (isDelivered) {
+            // DEVE ser removido da view 'pending'
             UI.removeOrderCard(order.id);
+            return;
+        } else {
+            // Se NÃO está 'Entregue', processa normalmente
+            switch (type) {
+                case 'added':
+                    UI.addOrderCard(order, viewType);
+                    break;
+                case 'modified':
+                    UI.updateOrderCard(order, viewType);
+                    break;
+                case 'removed':
+                    UI.removeOrderCard(order.id);
+                    break;
+            }
         }
-        return;
-    }
-    
-    switch (type) {
-        case 'added':
-            UI.addOrderCard(order, viewType);
-            break;
-        case 'modified':
-            UI.updateOrderCard(order, viewType);
-            break;
-        case 'removed':
+    } 
+    // Rota 2: Estamos na view 'delivered'
+    else if (viewType === 'delivered') {
+        // Se o pedido NÃO está 'Entregue' (ex: foi movido de volta para 'pendente')
+        if (!isDelivered) {
+            // DEVE ser removido da view 'delivered'
             UI.removeOrderCard(order.id);
-            break;
+            return;
+        } else {
+             // Se ESTÁ 'Entregue', processa normalmente
+            switch (type) {
+                case 'added':
+                    UI.addOrderCard(order, viewType);
+                    break;
+                case 'modified':
+                    UI.updateOrderCard(order, viewType);
+                    break;
+                case 'removed':
+                    UI.removeOrderCard(order.id);
+                    break;
+            }
+        }
     }
+    // --- FIM DA CORREÇÃO ---
 };
 
 /**
