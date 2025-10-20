@@ -24,10 +24,9 @@ const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig)
     unsubscribeListener = onSnapshot(q, (snapshot) => {
         
         snapshot.docChanges().forEach((change) => {
-            // Ignora eventos que vêm do cache local
-            if (change.doc.metadata.hasPendingWrites) {
-                return;
-            }
+            // --- CORREÇÃO: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
+            // Isso garante que a lista de transações se atualize
+            // imediatamente após o usuário salvar um novo lançamento.
 
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allTransactions.findIndex(t => t.id === data.id);
@@ -40,6 +39,8 @@ const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig)
             } else if (change.type === 'modified') {
                 if (index > -1) {
                     allTransactions[index] = data; // Atualiza o item no cache
+                } else {
+                    allTransactions.push(data); // Adiciona se não existia
                 }
             } else if (change.type === 'removed') {
                 if (index > -1) {
