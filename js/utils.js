@@ -93,24 +93,27 @@ export const initializeIdleTimer = (dom, logoutHandler) => {
 
 /**
  * =========================================================================
- * v4.2.2f - AUMENTO DO TIMEOUT DE SONDAGEM
+ * v4.2.2g - SONDAGEM (POLLING) NO ALIAS
  * =========================================================================
- * A lógica de sondagem (polling) v4.2.2d/e está correta, mas o timeout
- * de 3 segundos (3000ms) está se esgotando. Vamos aumentar para
- * 8 segundos (8000ms) para dar tempo aos scripts CDN (que podem
- * esperar pelo DOMContentLoaded) de executarem.
+ * O index.html (v4.2.2g) reintroduziu o alias (window.jsPDF) e
+ * está usando o autotable@3.5.25 (estável).
+ *
+ * Esta função agora sonda (polls) o PROTÓTIPO DO ALIAS (window.jsPDF.prototype.autoTable),
+ * pois a hipótese (v4.2.2g) é que o plugin v3.5.25 irá se anexar lá.
+ *
+ * Mantemos o timeout de 8 segundos (v4.2.2f) por segurança.
+ *
  * @param {number} timeout - Tempo máximo de espera em milissegundos.
  * @returns {Promise<boolean>} Resolve(true) se as bibliotecas forem carregadas, Rejeita se o tempo acabar.
  */
-const awaitPdfLibraries = (timeout = 8000) => { // <-- MUDANÇA v4.2.2f: de 3000 para 8000
+const awaitPdfLibraries = (timeout = 8000) => {
     return new Promise((resolve, reject) => {
         
-        // v4.2.2d: Verifica o caminho nativo do jspdf v2.x (window.jspdf.jsPDF)
+        // MUDANÇA v4.2.2g: Verifica o ALIAS (window.jsPDF) e o protótipo dele.
         const checkLibraries = () => {
             return (
-                typeof window.jspdf !== 'undefined' && 
-                typeof window.jspdf.jsPDF !== 'undefined' && 
-                typeof window.jspdf.jsPDF.prototype.autoTable !== 'undefined'
+                typeof window.jsPDF !== 'undefined' && 
+                typeof window.jsPDF.prototype.autoTable !== 'undefined'
             );
         };
 
@@ -131,7 +134,7 @@ const awaitPdfLibraries = (timeout = 8000) => { // <-- MUDANÇA v4.2.2f: de 3000
             if (Date.now() - startTime > timeout) {
                 clearInterval(interval);
                 // Rejeita para que a função chamadora possa mostrar o modal de erro
-                return reject(new Error('PDF libraries (jspdf v2 or autoTable v3) failed to load within the timeout period.'));
+                return reject(new Error('PDF libraries (jspdf alias or autoTable v3.5.25) failed to load within the timeout period.'));
             }
         }, 100); // Sonda (poll) a cada 100ms
     });
@@ -147,9 +150,9 @@ const awaitPdfLibraries = (timeout = 8000) => { // <-- MUDANÇA v4.2.2f: de 3000
  */
 export const generateComprehensivePdf = async (orderId, allOrders, userCompanyName, showInfoModal) => {
     
-    // --- MUDANÇA v4.2.2f: Aumentando o timeout na chamada ---
+    // --- Lógica v4.2.2g ---
     try {
-        await awaitPdfLibraries(8000); // Espera até 8s pelas bibliotecas
+        await awaitPdfLibraries(8000); // Espera até 8s (agora verificando o alias)
     } catch (libError) {
         console.error(libError.message);
         // Esta é a mensagem de erro v4.2.2b (Modal v2)
@@ -166,8 +169,8 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
     }
 
     try {
-        // --- v4.2.2d: Instancia a partir do objeto nativo v2.x 'window.jspdf.jsPDF' ---
-        const doc = new window.jspdf.jsPDF('p', 'mm', 'a4'); 
+        // --- MUDANÇA v4.2.2g: Instancia a partir do ALIAS 'window.jsPDF' ---
+        const doc = new window.jsPDF('p', 'mm', 'a4'); 
         
         const A4_WIDTH = 210;
         const MARGIN = 15;
@@ -389,9 +392,9 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
     
-    // --- MUDANÇA v4.2.2f: Aumentando o timeout na chamada ---
+    // --- Lógica v4.2.2g ---
     try {
-        await awaitPdfLibraries(8000); // Espera até 8s pelas bibliotecas
+        await awaitPdfLibraries(8000); // Espera até 8s (agora verificando o alias)
     } catch (libError) {
         console.error(libError.message);
         // Esta é a mensagem de erro v4.2.2b (Modal v2)
@@ -430,8 +433,8 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         const amountPaid = orderData.downPayment || 0; // O fluxo de 'quitar' garante que downPayment == grandTotal
 
         // 3. Inicializa o Documento PDF
-        // --- v4.2.2d: Instancia a partir do objeto nativo v2.x 'window.jspdf.jsPDF' ---
-        const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
+        // --- MUDANÇA v4.2.2g: Instancia a partir do ALIAS 'window.jsPDF' ---
+        const doc = new window.jsPDF('p', 'mm', 'a4');
         
         const A4_WIDTH = 210;
         const MARGIN = 15;
@@ -537,7 +540,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         showInfoModal("Recibo gerado com sucesso!");
 
     } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo (v4.2.2f):", error);
+        console.error("Erro ao gerar PDF do Recibo (v4.2.2g):", error);
         // Mensagem de erro específica se a autoTable falhar
         if (error.message && error.message.includes("autoTable")) {
             showInfoModal("Erro: A biblioteca 'autoTable' não foi carregada. Verifique a internet e atualize a página.");
