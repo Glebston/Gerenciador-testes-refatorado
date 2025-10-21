@@ -482,15 +482,22 @@ UI.DOM.orderForm.addEventListener('submit', async (e) => {
         
         UI.DOM.orderModal.classList.add('hidden');
         
+        // --- CORREÇÃO v4.2.2: Lógica do Recibo ---
         if (orderData.orderStatus === 'Finalizado' || orderData.orderStatus === 'Entregue') {
-            const generate = await UI.showConfirmModal("Pedido salvo com sucesso! Deseja gerar o recibo de quitação?", "Sim, gerar recibo", "Não, obrigado");
+            const generate = await UI.showConfirmModal(
+                "Pedido salvo com sucesso! Deseja gerar o Recibo de Quitação e Entrega?", 
+                "Sim, gerar recibo", 
+                "Não, obrigado"
+            );
             if (generate) {
+                // Precisamos passar os dados completos para a função
                 const fullOrderData = { ...orderData, id: savedOrderId };
                 await generateReceiptPdf(fullOrderData, userCompanyName, UI.showInfoModal);
             }
         } else {
              UI.showInfoModal("Pedido salvo com sucesso!");
         }
+        // --- FIM DA CORREÇÃO ---
 
     } catch (error) { 
         console.error("Erro ao salvar pedido:", error);
@@ -538,6 +545,9 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
             "Cancelar"
         ).then(confirmed => {
             if (confirmed) {
+                // --- CORREÇÃO v4.2.2: Lógica do Recibo no Atalho ---
+                
+                // 1. Calcula o valor total
                 let totalValue = 0;
                 (order.parts || []).forEach(p => {
                     const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
@@ -550,18 +560,29 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                 });
                 totalValue -= (order.discount || 0);
 
-                const updatedOrder = { ...order };
-                updatedOrder.downPayment = totalValue;
-                updatedOrder.orderStatus = 'Entregue';
+                // 2. Prepara os dados atualizados
+                const updatedOrderData = { ...order };
+                updatedOrderData.downPayment = totalValue;
+                updatedOrderData.orderStatus = 'Entregue';
 
-                saveOrder(updatedOrder, id)
-                    .then(() => {
-                        UI.showInfoModal("Pedido quitado e movido para 'Entregues' com sucesso!");
+                // 3. Salva no banco
+                saveOrder(updatedOrderData, id)
+                    .then(async () => { // Adiciona 'async'
+                        // 4. Pergunta sobre o recibo (A NOVA LÓGICA)
+                        const generate = await UI.showConfirmModal(
+                            "Pedido quitado e movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
+                            "Sim, gerar recibo",
+                            "Não, obrigado"
+                        );
+                        if (generate) {
+                            await generateReceiptPdf(updatedOrderData, userCompanyName, UI.showInfoModal);
+                        }
                     })
                     .catch(error => {
                         console.error("Erro ao quitar e entregar pedido:", error);
                         UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
                     });
+                // --- FIM DA CORREÇÃO ---
             }
         });
     }
