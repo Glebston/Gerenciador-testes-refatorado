@@ -1,3 +1,4 @@
+// === [INÍCIO: index.html] ===
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -11,6 +12,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+      if (window.jspdf && window.jspdf.jsPDF) {
+        window.jsPDF = window.jspdf.jsPDF;
+      }
+    </script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     
     <link rel="stylesheet" href="style.css">
@@ -488,3 +496,4 @@
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
+// === [FIM: index.html] ===
