@@ -325,7 +325,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
 
 /**
  * =========================================================================
- * v4.2.2 - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA
+ * v4.2.2a - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA
  * =========================================================================
  * Gera um PDF de recibo de quitação E entrega.
  * Corrigido para usar jsPDF nativo e cálculos corretos.
@@ -335,10 +335,14 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
     // 1. Verifica se as bibliotecas jsPDF e autoTable estão carregadas
-    if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined' || typeof doc.autoTable === 'undefined') {
+    // --- CORREÇÃO v4.2.2a: Verifica o 'prototype' do autoTable ---
+    if (typeof window.jspdf === 'undefined' || 
+        typeof window.jspdf.jsPDF === 'undefined' || 
+        typeof window.jspdf.jsPDF.prototype.autoTable === 'undefined') {
         showInfoModal("Erro: A biblioteca de PDF (jsPDF ou autoTable) não pôde ser carregada. Verifique sua conexão com a internet.");
         return;
     }
+    // --- FIM DA CORREÇÃO ---
     
     showInfoModal("Gerando recibo...");
 
@@ -476,7 +480,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         showInfoModal("Recibo gerado com sucesso!");
 
     } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo (v4.2.2):", error);
+        console.error("Erro ao gerar PDF do Recibo (v4.2.2a):", error);
         // Mensagem de erro específica se a autoTable falhar
         if (error.message && error.message.includes("autoTable")) {
             showInfoModal("Erro: A biblioteca 'autoTable' não foi carregada. Verifique a internet e atualize a página.");
