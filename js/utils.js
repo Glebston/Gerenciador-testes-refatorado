@@ -38,7 +38,7 @@ export const sortSizes = (sizesObject) => {
         const indexB = SIZES_ORDER.indexOf(b[0]);
         if (indexA === -1) return 1;
         if (indexB === -1) return -1;
-        return indexA - indexB;
+        return indexA - b[0];
     });
 };
 
@@ -324,68 +324,164 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
 };
 
 /**
- * Gera um PDF de recibo de quitação simples para um pedido.
+ * =========================================================================
+ * v4.2.2 - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA
+ * =========================================================================
+ * Gera um PDF de recibo de quitação E entrega.
+ * Corrigido para usar jsPDF nativo e cálculos corretos.
  * @param {object} orderData - O objeto de dados do pedido.
  * @param {string} userCompanyName - O nome da empresa do usuário.
  * @param {function} showInfoModal - A função para exibir modais de informação.
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
-    // **AJUSTE DE ROBUSTEZ:** Verifica se a biblioteca jsPDF foi carregada
-    if (typeof window.jspdf === 'undefined') {
-        showInfoModal("Erro: A biblioteca de PDF não pôde ser carregada. Verifique sua conexão com a internet.");
+    // 1. Verifica se as bibliotecas jsPDF e autoTable estão carregadas
+    if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined' || typeof doc.autoTable === 'undefined') {
+        showInfoModal("Erro: A biblioteca de PDF (jsPDF ou autoTable) não pôde ser carregada. Verifique sua conexão com a internet.");
         return;
     }
     
-    let totalValue = 0;
-    (orderData.parts || []).forEach(p => {
-        const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
-        const specificQty = (p.specifics || []).length;
-        const standardSub = standardQty * (p.unitPriceStandard || p.unitPrice || 0);
-        const specificSub = specificQty * (p.unitPriceSpecific || p.unitPrice || 0);
-        totalValue += standardSub + specificSub;
-    });
-    totalValue -= (orderData.discount || 0);
+    showInfoModal("Gerando recibo...");
 
-    const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-    
-    const companyUser = userCompanyName || 'Sua Empresa';
-
-    const receiptHtml = `
-        <div style="font-family: Arial, sans-serif; padding: 40px; border: 1px solid #eee; width: 700px; margin: auto; background-color: white;">
-            <h1 style="text-align: center; font-size: 24px; margin-bottom: 40px; color: #333;">RECIBO DE QUITAÇÃO</h1>
-            <p style="font-size: 16px; line-height: 1.6; color: #555;">
-                Recebemos de <strong>${orderData.clientName || ''}</strong>, a importância de 
-                <strong>R$ ${totalValue.toFixed(2)}</strong>, referente à quitação total do pedido de 
-                ${(orderData.parts[0]?.type || 'fardamento personalizado').toLowerCase()}.
-            </p>
-            <p style="font-size: 14px; color: #777; margin-top: 30px;">
-                Declaramos que o valor acima foi integralmente recebido, não restando nenhum débito pendente referente a este pedido.
-            </p>
-            <p style="text-align: right; margin-top: 50px; font-size: 16px;">${today}</p>
-            <div style="margin-top: 80px; text-align: center;">
-                <div style="display: inline-block; border-top: 1px solid #333; width: 300px; padding-top: 8px; font-size: 14px;">
-                    Assinatura ( ${companyUser} )
-                </div>
-            </div>
-        </div>
-    `;
-    
     try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
-        
-        await doc.html(receiptHtml, {
-            callback: function (doc) {
-                doc.save(`Recibo_${orderData.clientName.replace(/\s/g, '_')}.pdf`);
-            },
-            x: 5,
-            y: 5,
-            width: 200, 
-            windowWidth: 700 
+        // 2. Cálculo de Total (LÓGICA CORRIGIDA E COMPLETA)
+        let subTotal = 0;
+        const tableBody = [];
+
+        (orderData.parts || []).forEach(p => {
+            const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
+            const specificQty = (p.specifics || []).length;
+            const detailedQty = (p.details || []).length;
+            const totalQty = standardQty + specificQty + detailedQty;
+
+            const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
+            const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+            const detailedSub = detailedQty * (p.unitPrice || 0);
+            
+            subTotal += (standardSub + specificSub + detailedSub);
+            
+            // Adiciona à tabela de itens para o recibo
+            if (totalQty > 0) {
+                tableBody.push([p.type, totalQty]);
+            }
         });
 
+        const discount = orderData.discount || 0;
+        const grandTotal = subTotal - discount;
+        const amountPaid = orderData.downPayment || 0; // O fluxo de 'quitar' garante que downPayment == grandTotal
+
+        // 3. Inicializa o Documento PDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const A4_WIDTH = 210;
+        const MARGIN = 15;
+        const contentWidth = A4_WIDTH - MARGIN * 2;
+        let yPosition = MARGIN;
+
+        // --- TÍTULO ---
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('RECIBO DE QUITAÇÃO E ENTREGA', A4_WIDTH / 2, yPosition, { align: 'center' });
+        yPosition += 15;
+
+        // --- INFORMAÇÕES DO CLIENTE ---
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Cliente:`, MARGIN, yPosition);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${orderData.clientName || 'N/A'}`, MARGIN + 18, yPosition);
+        yPosition += 6;
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Telefone:`, MARGIN, yPosition);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${orderData.clientPhone || 'N/A'}`, MARGIN + 18, yPosition);
+        yPosition += 10;
+        
+        // --- RESUMO FINANCEIRO ---
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Resumo Financeiro', MARGIN, yPosition);
+        yPosition += 6;
+
+        const financialDetails = [
+            ['Valor Bruto (Itens):', `R$ ${subTotal.toFixed(2)}`],
+            ['Desconto:', `R$ ${discount.toFixed(2)}`],
+            ['VALOR TOTAL DO PEDIDO:', `R$ ${grandTotal.toFixed(2)}`],
+            ['VALOR PAGO (QUITADO):', `R$ ${amountPaid.toFixed(2)}`]
+        ];
+        
+        doc.autoTable({
+            body: financialDetails,
+            startY: yPosition,
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 1.5 },
+            columnStyles: { 0: { fontStyle: 'bold' } },
+            didParseCell: (data) => {
+                if (data.row.index >= 2) { // Deixa VALOR TOTAL e PAGO em negrito
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            },
+            didDrawPage: (data) => { yPosition = data.cursor.y; }
+        });
+        yPosition = doc.autoTable.previous.finalY + 10;
+        
+        // --- ITENS ENTREGUES (Nova Tabela) ---
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Itens Entregues (Conferência)', MARGIN, yPosition);
+        yPosition += 6;
+        
+        doc.autoTable({
+            head: [['Tipo da Peça', 'Quantidade Total']],
+            body: tableBody,
+            startY: yPosition,
+            theme: 'grid',
+            headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+            didDrawPage: (data) => { yPosition = data.cursor.y; }
+        });
+        yPosition = doc.autoTable.previous.finalY + 15;
+
+        // --- TEXTO DE DECLARAÇÃO (Novo) ---
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'italic');
+        const declarationText = `Declaro para os devidos fins que recebi os itens listados na tabela acima, conferi as quantidades e que o pedido foi entregue em sua totalidade. Declaro também que o valor total do pedido encontra-se quitado.`;
+        const splitText = doc.splitTextToSize(declarationText, contentWidth);
+        doc.text(splitText, MARGIN, yPosition);
+        yPosition += (splitText.length * 5) + 20;
+        
+        // --- DATA ---
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        const today = new Date().toLocaleDateString('pt-BR');
+        doc.text(`Data: ${today}`, MARGIN, yPosition);
+        yPosition += 25;
+
+        // --- CAMPOS DE ASSINATURA (Novos) ---
+        const signatureY = yPosition;
+        const signatureWidth = 80; // Largura da linha de assinatura
+        
+        // Assinatura Empresa
+        doc.line(MARGIN, signatureY, MARGIN + signatureWidth, signatureY); // Linha
+        doc.text(userCompanyName || 'Empresa', MARGIN, signatureY + 6);
+        doc.text('(Entregador / Recebedor)', MARGIN, signatureY + 11);
+        
+        // Assinatura Cliente
+        const clientX = A4_WIDTH - MARGIN - signatureWidth;
+        doc.line(clientX, signatureY, clientX + signatureWidth, signatureY); // Linha
+        doc.text(orderData.clientName || 'Cliente', clientX, signatureY + 6);
+        doc.text('(Recebedor do Pedido)', clientX, signatureY + 11);
+        
+        // 4. Salva o PDF
+        doc.save(`Recibo_Entrega_${orderData.clientName.replace(/\s/g, '_')}.pdf`);
+        showInfoModal("Recibo gerado com sucesso!");
+
     } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo:", error);
-        showInfoModal("Não foi possível gerar o PDF do recibo.");
+        console.error("Erro ao gerar PDF do Recibo (v4.2.2):", error);
+        // Mensagem de erro específica se a autoTable falhar
+        if (error.message && error.message.includes("autoTable")) {
+            showInfoModal("Erro: A biblioteca 'autoTable' não foi carregada. Verifique a internet e atualize a página.");
+        } else {
+            showInfoModal("Não foi possível gerar o PDF do recibo.");
+        }
     }
 };
