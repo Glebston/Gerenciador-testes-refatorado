@@ -99,9 +99,11 @@ export const initializeIdleTimer = (dom, logoutHandler) => {
  * @param {function} showInfoModal - A função para exibir modais de informação.
  */
 export const generateComprehensivePdf = async (orderId, allOrders, userCompanyName, showInfoModal) => {
-    // **AJUSTE DE ROBUSTEZ:** Verifica se a biblioteca jsPDF foi carregada
-    if (typeof window.jspdf === 'undefined') {
-        showInfoModal("Erro: A biblioteca de PDF não pôde ser carregada. Verifique sua conexão com a internet.");
+    // **AJUSTE DE ROBUSTEZ (v4.2.2b):** Verifica se o alias e o autoTable foram carregados
+    // O index.html (v4.2.2a) cria um alias 'window.jsPDF' para compatibilidade.
+    // O plugin autoTable (v3.x) se anexa a esse alias. Verificamos o alias.
+    if (typeof window.jsPDF === 'undefined' || typeof window.jsPDF.prototype.autoTable === 'undefined') {
+        showInfoModal("Erro: A biblioteca de PDF (jsPDF/autoTable) não pôde ser carregada. Verifique a conexão e desative AdBlockers.");
         return;
     }
 
@@ -113,8 +115,10 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
     }
 
     try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        // --- CORREÇÃO v4.2.2b: Instancia a partir do alias 'window.jsPDF' ---
+        // const { jsPDF } = window.jspdf; // <- Linha antiga
+        const doc = new window.jsPDF('p', 'mm', 'a4'); // <- Linha nova
+        
         const A4_WIDTH = 210;
         const MARGIN = 15;
         const contentWidth = A4_WIDTH - MARGIN * 2;
@@ -325,7 +329,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
 
 /**
  * =========================================================================
- * v4.2.2a - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA
+ * v4.2.2b - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA
  * =========================================================================
  * Gera um PDF de recibo de quitação E entrega.
  * Corrigido para usar jsPDF nativo e cálculos corretos.
@@ -335,11 +339,12 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
     // 1. Verifica se as bibliotecas jsPDF e autoTable estão carregadas
-    // --- CORREÇÃO v4.2.2a: Verifica o 'prototype' do autoTable ---
-    if (typeof window.jspdf === 'undefined' || 
-        typeof window.jspdf.jsPDF === 'undefined' || 
-        typeof window.jspdf.jsPDF.prototype.autoTable === 'undefined') {
-        showInfoModal("Erro: A biblioteca de PDF (jsPDF ou autoTable) não pôde ser carregada. Verifique sua conexão com a internet.");
+    // --- CORREÇÃO v4.2.2b: Verifica e usa o 'alias' (window.jsPDF) ---
+    // O index.html (v4.2.2a) cria um alias 'window.jsPDF' para compatibilidade.
+    // O plugin autoTable (v3.x) se anexa a esse alias. Verificamos o alias.
+    if (typeof window.jsPDF === 'undefined' || 
+        typeof window.jsPDF.prototype.autoTable === 'undefined') {
+        showInfoModal("Erro: A biblioteca de PDF (jsPDF ou autoTable) não pôde ser carregada. Verifique sua conexão e desative AdBlockers.");
         return;
     }
     // --- FIM DA CORREÇÃO ---
@@ -374,8 +379,10 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         const amountPaid = orderData.downPayment || 0; // O fluxo de 'quitar' garante que downPayment == grandTotal
 
         // 3. Inicializa o Documento PDF
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        // --- CORREÇÃO v4.2.2b: Instancia a partir do alias 'window.jsPDF' ---
+        // const { jsPDF } = window.jspdf; // <- Linha antiga
+        const doc = new window.jsPDF('p', 'mm', 'a4'); // <- Linha nova
+        
         const A4_WIDTH = 210;
         const MARGIN = 15;
         const contentWidth = A4_WIDTH - MARGIN * 2;
@@ -480,7 +487,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         showInfoModal("Recibo gerado com sucesso!");
 
     } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo (v4.2.2a):", error);
+        console.error("Erro ao gerar PDF do Recibo (v4.2.2b):", error);
         // Mensagem de erro específica se a autoTable falhar
         if (error.message && error.message.includes("autoTable")) {
             showInfoModal("Erro: A biblioteca 'autoTable' não foi carregada. Verifique a internet e atualize a página.");
