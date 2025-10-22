@@ -1,519 +1,718 @@
-// =========================================================================
-// v4.2.2k - CORREÇÃO FINAL (applyPlugin)
-// =========================================================================
-// Importa jsPDF (named export)
+// Importa as bibliotecas jsPDF e AutoTable com versões compatíveis
 import { jsPDF } from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm";
-// CORREÇÃO v4.2.2k: Importa a função 'applyPlugin' (named export)
-import { applyPlugin } from "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/+esm";
+import autoTablePlugin from "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/+esm";
 
-// CORREÇÃO v4.2.2k: Executa o 'patch' explicitamente.
-// Isso modifica o protótipo do jsPDF importado, adicionando a função .autoTable()
-applyPlugin(jsPDF);
-// =========================================================================
+// Registra o plugin AutoTable no construtor jsPDF (executado uma vez)
+autoTablePlugin(jsPDF);
 
-// --- Constantes Utilitárias ---
-const IMGBB_API_KEY = "f012978df48f3596b193c06e05589442";
-const SIZES_ORDER = [
-    'PP', 'P', 'M', 'G', 'GG', 'XG',
-    '2 anos', '4 anos', '6 anos', '8 anos', '10 anos', '12 anos'
-];
-
-
-// --- Funções Utilitárias de API e Dados ---
-
-export const fileToBase64 = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = error => reject(error);
-});
-
-export const uploadToImgBB = async (base64Image) => {
+// Função para fazer upload de imagem para o ImgBB
+export async function uploadToImgBB(file) {
+    const apiKey = 'fb2c7e34fb37f1ea8f085bc10bc88f48';
     const formData = new FormData();
-    formData.append('image', base64Image);
+    formData.append('image', file);
+
     try {
-        const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
             method: 'POST',
             body: formData
         });
+
+        if (!response.ok) {
+            throw new Error('Erro no upload da imagem');
+        }
+
         const data = await response.json();
-        if (data.success) return data.data.url;
-        throw new Error(data.error.message);
+        return data.data.url;
     } catch (error) {
-        console.error('Erro no upload para ImgBB:', error);
-        return null;
+        console.error('Erro ao fazer upload:', error);
+        throw error;
     }
-};
+}
 
-export const sortSizes = (sizesObject) => {
-    return Object.entries(sizesObject).sort((a, b) => {
-        const indexA = SIZES_ORDER.indexOf(a[0]);
-        const indexB = SIZES_ORDER.indexOf(b[0]);
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        // CORREÇÃO: b[0] estava incorreto, deveria ser indexB
-        return indexA - indexB; 
+// Função para gerar PDF do recibo de quitação e entrega
+export function generateReceiptPdf(order, companyName = "Nossa Empresa") {
+    const doc = new jsPDF();
+    
+    // Configurações de margem e espaçamento
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    // Cabeçalho do documento
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('RECIBO DE QUITAÇÃO E ENTREGA', pageWidth / 2, margin + 10, { align: 'center' });
+    
+    // Linha separadora
+    doc.setLineWidth(0.5);
+    doc.line(margin, margin + 15, pageWidth - margin, margin + 15);
+    
+    // Informações da empresa
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(companyName, pageWidth / 2, margin + 25, { align: 'center' });
+    
+    // Informações do pedido
+    let yPosition = margin + 40;
+    doc.setFontSize(11);
+    
+    // Dados do cliente
+    doc.setFont(undefined, 'bold');
+    doc.text('DADOS DO CLIENTE:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    yPosition += 7;
+    doc.text(`Nome: ${order.customerName}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Telefone: ${order.customerPhone}`, margin, yPosition);
+    yPosition += 6;
+    
+    // Dados do pedido
+    doc.setFont(undefined, 'bold');
+    yPosition += 8;
+    doc.text('DADOS DO PEDIDO:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    yPosition += 7;
+    doc.text(`Pedido #: ${order.orderNumber}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Valor Total: ${formatCurrency(order.totalAmount)}`, margin, yPosition);
+    
+    // Tabela de itens
+    yPosition += 15;
+    doc.setFont(undefined, 'bold');
+    doc.text('ITENS DO PEDIDO:', margin, yPosition);
+    yPosition += 5;
+    
+    // Prepara os dados para a tabela
+    const tableData = order.items.map(item => [
+        item.type || 'Item',
+        item.name || '-',
+        item.quantity || 1,
+        formatCurrency(item.unitPrice || 0),
+        formatCurrency(item.subtotal || 0)
+    ]);
+    
+    // Adiciona a tabela usando autoTable
+    doc.autoTable({
+        startY: yPosition,
+        head: [['Tipo', 'Descrição', 'Qtd', 'Valor Unit.', 'Subtotal']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+            fillColor: [66, 66, 66],
+            fontSize: 10,
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        bodyStyles: {
+            fontSize: 9,
+            halign: 'center'
+        },
+        columnStyles: {
+            0: { halign: 'left', cellWidth: 30 },
+            1: { halign: 'left', cellWidth: 'auto' },
+            2: { halign: 'center', cellWidth: 20 },
+            3: { halign: 'right', cellWidth: 30 },
+            4: { halign: 'right', cellWidth: 30 }
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: function(data) {
+            // Salva a posição Y após a tabela
+            yPosition = data.cursor.y;
+        }
     });
-};
-
-
-// --- Lógica do Timer de Inatividade ---
-
-let idleTimeout, countdownInterval;
-let domElements, logoutHandlerCallback; // Dependências injetadas
-
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000; 
-const COUNTDOWN_SECONDS = 60;
-
-const startCountdown = () => {
-    domElements.idleModal.classList.remove('hidden');
-    let secondsLeft = COUNTDOWN_SECONDS;
-    domElements.countdownTimer.textContent = secondsLeft;
-    countdownInterval = setInterval(() => {
-        secondsLeft--;
-        domElements.countdownTimer.textContent = secondsLeft;
-        if (secondsLeft <= 0) {
-            clearInterval(countdownInterval);
-            if (logoutHandlerCallback) logoutHandlerCallback();
-        }
-    }, 1000);
-};
-
-export const resetIdleTimer = () => {
-    if (!domElements || !logoutHandlerCallback) return; // Não executa se não for inicializado
-    clearTimeout(idleTimeout);
-    clearInterval(countdownInterval);
-    domElements.idleModal.classList.add('hidden');
-    idleTimeout = setTimeout(startCountdown, IDLE_TIMEOUT_MS);
-};
-
-/**
- * Inicializa o timer de inatividade, recebendo as dependências necessárias.
- * @param {object} dom - A referência para o objeto DOM do ui.js.
- * @param {function} logoutHandler - A função de logout a ser chamada quando o tempo esgotar.
- */
-export const initializeIdleTimer = (dom, logoutHandler) => {
-    domElements = dom;
-    logoutHandlerCallback = logoutHandler;
     
-    domElements.stayLoggedInBtn.addEventListener('click', resetIdleTimer);
-
-    // Inicia o timer pela primeira vez
-    resetIdleTimer();
-};
-
-
-// --- Funções de Geração de PDF ---
-
-/**
- * =========================================================================
- * v4.2.2k - FUNÇÃO DE POLLING REMOVIDA
- * =========================================================================
- * A função 'awaitPdfLibraries' foi removida.
- * Os imports ESM no topo do arquivo garantem que jsPDF e autoTable
- * estejam carregados e prontos para uso antes que este código seja executado.
- */
-// const awaitPdfLibraries = (...) => { ... } // REMOVIDO
-
-
-/**
- * Gera um PDF detalhado e completo de um pedido específico.
- * @param {string} orderId - O ID do pedido a ser impresso.
- * @param {Array} allOrders - O array completo de todos os pedidos.
- * @param {string} userCompanyName - O nome da empresa do usuário para o cabeçalho.
- * @param {function} showInfoModal - A função para exibir modais de informação.
- */
-export const generateComprehensivePdf = async (orderId, allOrders, userCompanyName, showInfoModal) => {
+    // Pega a posição Y após a tabela
+    yPosition = doc.lastAutoTable.finalY + 15;
     
-    // --- LÓGICA v4.2.2k: Bloco try/catch do awaitPdfLibraries removido ---
-    // (Não é mais necessário)
-
-    showInfoModal("Iniciando geração do PDF...");
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) {
-        showInfoModal("Erro: Pedido não encontrado.");
-        return;
-    }
-
-    try {
-        // --- MUDANÇA v4.2.2k: Instancia a partir do IMPORT 'jsPDF' ---
-        const doc = new jsPDF('p', 'mm', 'a4'); 
-        
-        const A4_WIDTH = 210;
-        const MARGIN = 15;
-        const contentWidth = A4_WIDTH - MARGIN * 2;
-        let yPosition = MARGIN;
-
-        // --- CABEÇALHO ---
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text(userCompanyName || 'Relatório de Pedido', A4_WIDTH / 2, yPosition, { align: 'center' });
-        yPosition += 10;
-
-        // --- DADOS DO CLIENTE ---
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Pedido - ${order.clientName}`, MARGIN, yPosition);
-        yPosition += 8;
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        const clientInfo = [
-            [`Telefone:`, `${order.clientPhone || 'N/A'}`],
-            [`Data do Pedido:`, `${order.orderDate ? new Date(order.orderDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}`],
-            [`Status:`, `${order.orderStatus}`],
-            [`Data de Entrega:`, `${order.deliveryDate ? new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}`]
-        ];
-        
-        // --- MUDANÇA v4.2.2k: Usa a sintaxe de plugin 'doc.autoTable(...)' ---
-        // (A sintaxe de uso estava correta na v4.2.2j, o patch é que faltava)
-        doc.autoTable({
-            body: clientInfo,
-            startY: yPosition,
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 1 },
-            columnStyles: { 0: { fontStyle: 'bold' } },
-            didDrawPage: (data) => { yPosition = data.cursor.y; }
-        });
-        
-        yPosition = doc.lastAutoTable.finalY + 5;
-
-        // --- TABELA DE PEÇAS ---
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Peças do Pedido', MARGIN, yPosition);
-        yPosition += 6;
-
-        const tableHead = [['Peça / Detalhes', 'Material', 'Cor', 'Qtd', 'V. Un.', 'Subtotal']];
-        const tableBody = [];
-        let subTotal = 0;
-
-        (order.parts || []).forEach(p => {
-            const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
-            const specificQty = (p.specifics || []).length;
-            const detailedQty = (p.details || []).length;
-            const totalQty = standardQty + specificQty + detailedQty;
-
-            const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
-            const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
-            const detailedSub = detailedQty * (p.unitPrice || 0);
-            const partSubtotal = standardSub + specificSub + detailedSub;
-            subTotal += partSubtotal;
-
-            let detailsText = '';
-            if (p.partInputType === 'comum') {
-                if (p.sizes && Object.keys(p.sizes).length > 0) {
-                    detailsText += Object.entries(p.sizes).map(([cat, sizes]) =>
-                        `${cat}: ${sortSizes(sizes).map(([size, qty]) => `${size}(${qty})`).join(', ')}`
-                    ).join('\n');
-                }
-                if (p.specifics && p.specifics.length > 0) {
-                    detailsText += (detailsText ? '\n' : '') + 'Específicos:\n' + p.specifics.map(s => 
-                        `- L:${s.width||'N/A'}, A:${s.height||'N/A'} (${s.observation||'Sem obs.'})`
-                    ).join('\n');
-                }
-            } else if (p.partInputType === 'detalhado' && p.details && p.details.length > 0) {
-                detailsText = p.details.map(d => `${d.name||''} - ${d.size||''} - ${d.number||''}`).join('\n');
-            }
-            
-            let unitPriceText = '';
-            if(p.partInputType === 'comum') {
-                if(standardQty > 0) unitPriceText += `R$ ${(p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0).toFixed(2)} (Padrão)\n`;
-                if(specificQty > 0) unitPriceText += `R$ ${(p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0).toFixed(2)} (Específico)`;
-            } else {
-                unitPriceText = `R$ ${(p.unitPrice || 0).toFixed(2)}`;
-            }
-
-            tableBody.push([
-                { content: `${p.type}\n${detailsText}`, styles: { fontSize: 8 } },
-                p.material,
-                p.colorMain,
-                totalQty,
-                { content: unitPriceText.trim(), styles: { halign: 'right' } },
-                { content: `R$ ${partSubtotal.toFixed(2)}`, styles: { halign: 'right' } }
-            ]);
-        });
-
-        // --- MUDANÇA v4.2.2k: Usa 'doc.autoTable(...)' ---
-        doc.autoTable({
-            head: tableHead,
-            body: tableBody,
-            startY: yPosition,
-            theme: 'grid',
-            headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
-            columnStyles: {
-                0: { cellWidth: 60 },
-                3: { halign: 'center' },
-                4: { halign: 'right' },
-                5: { halign: 'right' }
-            },
-            didDrawPage: (data) => { yPosition = data.cursor.y; }
-        });
-        
-        yPosition = doc.lastAutoTable.finalY + 8;
-
-        // --- OBSERVAÇÃO E FINANCEIRO ---
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Observação Geral', MARGIN, yPosition);
-        yPosition += 5;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        const obsLines = doc.splitTextToSize(order.generalObservation || 'Nenhuma.', contentWidth);
-        doc.text(obsLines, MARGIN, yPosition);
-        yPosition += (obsLines.length * 4) + 8;
-
-        const discount = order.discount || 0;
-        const grandTotal = subTotal - discount;
-        const remaining = grandTotal - (order.downPayment || 0);
-
-        const financialDetails = [
-            ['Valor Bruto:', `R$ ${subTotal.toFixed(2)}`],
-            ['Desconto:', `R$ ${discount.toFixed(2)}`],
-            ['Adiantamento:', `R$ ${(order.downPayment || 0).toFixed(2)}`],
-            ['Forma de Pgto:', `${order.paymentMethod || 'N/A'}`],
-            ['VALOR TOTAL:', `R$ ${grandTotal.toFixed(2)}`],
-            ['RESTA PAGAR:', `R$ ${remaining.toFixed(2)}`]
-        ];
-
-        // --- MUDANÇA v4.2.2k: Usa 'doc.autoTable(...)' ---
-        doc.autoTable({
-            body: financialDetails,
-            startY: yPosition,
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 1.5 },
-            columnStyles: { 0: { fontStyle: 'bold' } },
-            didParseCell: (data) => {
-                if (data.row.index >= 4) {
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fontSize = 12;
-                }
-            },
-            didDrawPage: (data) => { yPosition = data.cursor.y; }
-        });
-        
-        yPosition = doc.lastAutoTable.finalY;
-
-        // --- IMAGENS ---
-        if (order.mockupUrls && order.mockupUrls.length > 0) {
-            yPosition += 10;
-            if (yPosition > 250) { 
-                doc.addPage();
-                yPosition = MARGIN;
-            }
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Arquivos (Mockups)', MARGIN, yPosition);
-            yPosition += 8;
-            
-            for (const url of order.mockupUrls) {
-                try {
-                    const imgData = await new Promise((resolve, reject) => {
-                        const img = new Image();
-                        img.crossOrigin = 'Anonymous';
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.width;
-                            canvas.height = img.height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
-                            resolve(canvas.toDataURL('image/jpeg', 0.9));
-                        };
-                        img.onerror = (err) => reject(new Error(`Falha ao carregar imagem: ${url}`));
-                        
-                        img.src = url.includes('?') ? `${url}&v=${Date.now()}` : `${url}?v=${Date.now()}`;
-                    });
-
-                    const imgProps = doc.getImageProperties(imgData);
-                    const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
-                    
-                    if (yPosition + imgHeight > 280) { // 297 (A4) - MARGIN
-                        doc.addPage();
-                        yPosition = MARGIN;
-                    }
-                    
-                    doc.addImage(imgData, 'JPEG', MARGIN, yPosition, contentWidth, imgHeight);
-                    yPosition += imgHeight + 5;
-
-                } catch (imgError) {
-                    console.error(imgError);
-                    if (yPosition > 280) { doc.addPage(); yPosition = MARGIN; }
-                    doc.setFontSize(9);
-                    doc.setTextColor(150);
-                    doc.text(`- Não foi possível carregar a imagem.`, MARGIN, yPosition);
-                    yPosition += 5;
-                    doc.setTextColor(0);
-                }
-            }
-        }
-        
-        doc.save(`Pedido_${order.clientName.replace(/\s/g, '_')}.pdf`);
-        showInfoModal("PDF gerado com sucesso!");
-
-    } catch (error) {
-        console.error("Erro ao gerar PDF programático (v4.2.2k):", error);
-        showInfoModal("Ocorreu um erro inesperado ao gerar o PDF.");
-    }
-};
-
-/**
- * =========================================================================
- * v4.2.2k - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA (ESM)
- * =========================================================================
- * Gera um PDF de recibo de quitação E entrega.
- * Corrigido para usar imports ESM nativos e sintaxe de plugin (applyPlugin).
- * @param {object} orderData - O objeto de dados do pedido.
- * @param {string} userCompanyName - O nome da empresa do usuário.
- * @param {function} showInfoModal - A função para exibir modais de informação.
- */
-export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
+    // Declaração de quitação e entrega
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text('DECLARAÇÃO:', margin, yPosition);
+    yPosition += 8;
     
-    // --- LÓGICA v4.2.2k: Bloco try/catch do awaitPdfLibraries removido ---
-    // (Não é mais necessário)
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    const declarationText = `Declaro ter recebido os itens acima discriminados em perfeitas condições e confirmo a quitação total do valor de ${formatCurrency(order.totalAmount)}.`;
     
-    showInfoModal("Gerando recibo...");
-
-    try {
-        // 2. Cálculo de Total (LÓGICA CORRIGIDA E COMPLETA)
-        let subTotal = 0;
-        const tableBody = [];
-
-        (orderData.parts || []).forEach(p => {
-            const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
-            const specificQty = (p.specifics || []).length;
-            const detailedQty = (p.details || []).length;
-            const totalQty = standardQty + specificQty + detailedQty;
-
-            const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
-            const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
-            const detailedSub = detailedQty * (p.unitPrice || 0);
-            
-            subTotal += (standardSub + specificSub + detailedSub);
-            
-            // Adiciona à tabela de itens para o recibo
-            if (totalQty > 0) {
-                tableBody.push([p.type, totalQty]);
-            }
-        });
-
-        const discount = orderData.discount || 0;
-        const grandTotal = subTotal - discount;
-        const amountPaid = orderData.downPayment || 0; // O fluxo de 'quitar' garante que downPayment == grandTotal
-
-        // 3. Inicializa o Documento PDF
-        // --- MUDANÇA v4.2.2k: Instancia a partir do IMPORT 'jsPDF' ---
-        const doc = new jsPDF('p', 'mm', 'a4');
-        
-        const A4_WIDTH = 210;
-        const MARGIN = 15;
-        const contentWidth = A4_WIDTH - MARGIN * 2;
-        let yPosition = MARGIN;
-
-        // --- TÍTULO ---
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('RECIBO DE QUITAÇÃO E ENTREGA', A4_WIDTH / 2, yPosition, { align: 'center' });
-        yPosition += 15;
-
-        // --- INFORMAÇÕES DO CLIENTE ---
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Cliente:`, MARGIN, yPosition);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${orderData.clientName || 'N/A'}`, MARGIN + 18, yPosition);
+    // Quebra o texto em linhas para caber na página
+    const lines = doc.splitTextToSize(declarationText, contentWidth);
+    lines.forEach(line => {
+        doc.text(line, margin, yPosition);
         yPosition += 6;
-
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Telefone:`, MARGIN, yPosition);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${orderData.clientPhone || 'N/A'}`, MARGIN + 18, yPosition);
-        yPosition += 10;
+    });
+    
+    // Espaço para assinaturas (se houver espaço na página)
+    yPosition += 20;
+    
+    // Verifica se há espaço para as assinaturas
+    if (yPosition + 40 < pageHeight - margin) {
+        // Linha de assinatura do cliente
+        doc.line(margin, yPosition, margin + 80, yPosition);
+        doc.setFontSize(9);
+        doc.text('Assinatura do Cliente', margin, yPosition + 5);
+        doc.text(`${order.customerName}`, margin, yPosition + 10);
         
-        // --- RESUMO FINANCEIRO ---
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Resumo Financeiro', MARGIN, yPosition);
-        yPosition += 6;
-
-        const financialDetails = [
-            ['Valor Bruto (Itens):', `R$ ${subTotal.toFixed(2)}`],
-            ['Desconto:', `R$ ${discount.toFixed(2)}`],
-            ['VALOR TOTAL DO PEDIDO:', `R$ ${grandTotal.toFixed(2)}`],
-            ['VALOR PAGO (QUITADO):', `R$ ${amountPaid.toFixed(2)}`]
-        ];
+        // Linha de assinatura da empresa
+        doc.line(pageWidth - margin - 80, yPosition, pageWidth - margin, yPosition);
+        doc.text('Assinatura da Empresa', pageWidth - margin - 80, yPosition + 5);
+        doc.text(companyName, pageWidth - margin - 80, yPosition + 10);
         
-        // --- MUDANÇA v4.2.2k: Usa 'doc.autoTable(...)' ---
-        doc.autoTable({
-            body: financialDetails,
-            startY: yPosition,
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 1.5 },
-            columnStyles: { 0: { fontStyle: 'bold' } },
-            didParseCell: (data) => {
-                if (data.row.index >= 2) { // Deixa VALOR TOTAL e PAGO em negrito
-                    data.cell.styles.fontStyle = 'bold';
-                }
-            },
-            didDrawPage: (data) => { yPosition = data.cursor.y; }
-        });
-        
-        yPosition = doc.lastAutoTable.finalY + 10;
-        
-        // --- ITENS ENTREGUES (Nova Tabela) ---
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Itens Entregues (Conferência)', MARGIN, yPosition);
-        yPosition += 6;
-        
-        // --- MUDANÇA v4.2.2k: Usa 'doc.autoTable(...)' ---
-        doc.autoTable({
-            head: [['Tipo da Peça', 'Quantidade Total']],
-            body: tableBody,
-            startY: yPosition,
-            theme: 'grid',
-            headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
-            didDrawPage: (data) => { yPosition = data.cursor.y; }
-        });
-        
-        yPosition = doc.lastAutoTable.finalY + 15;
-
-        // --- TEXTO DE DECLARAÇÃO (Novo) ---
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'italic');
-        const declarationText = `Declaro para os devidos fins que recebi os itens listados na tabela acima, conferi as quantidades e que o pedido foi entregue em sua totalidade. Declaro também que o valor total do pedido encontra-se quitado.`;
-        const splitText = doc.splitTextToSize(declarationText, contentWidth);
-        doc.text(splitText, MARGIN, yPosition);
-        yPosition += (splitText.length * 5) + 20;
-        
-        // --- DATA ---
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        const today = new Date().toLocaleDateString('pt-BR');
-        doc.text(`Data: ${today}`, MARGIN, yPosition);
+        // Data e hora
         yPosition += 25;
-
-        // --- CAMPOS DE ASSINATURA (Novos) ---
-        const signatureY = yPosition;
-        const signatureWidth = 80; // Largura da linha de assinatura
-        
-        // Assinatura Empresa
-        doc.line(MARGIN, signatureY, MARGIN + signatureWidth, signatureY); // Linha
-        doc.text(userCompanyName || 'Empresa', MARGIN, signatureY + 6);
-        doc.text('(Entregador / Recebedor)', MARGIN, signatureY + 11);
-        
-        // Assinatura Cliente
-        const clientX = A4_WIDTH - MARGIN - signatureWidth;
-        doc.line(clientX, signatureY, clientX + signatureWidth, signatureY); // Linha
-        doc.text(orderData.clientName || 'Cliente', clientX, signatureY + 6);
-        doc.text('(Recebedor do Pedido)', clientX, signatureY + 11);
-        
-        // 4. Salva o PDF
-        doc.save(`Recibo_Entrega_${orderData.clientName.replace(/\s/g, '_')}.pdf`);
-        showInfoModal("Recibo gerado com sucesso!");
-
-    } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo (v4.2.2k):", error);
-        // Mensagem de erro genérica, pois o carregamento da lib não é mais o problema
-        showInfoModal("Não foi possível gerar o PDF do recibo. Ocorreu um erro interno.");
+        doc.setFontSize(8);
+        const now = new Date();
+        const dateTimeStr = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR')}`;
+        doc.text(`Documento gerado em: ${dateTimeStr}`, pageWidth / 2, yPosition, { align: 'center' });
     }
+    
+    // Retorna o documento PDF
+    return doc;
+}
+
+// Função para gerar PDF do pedido completo
+export function generateOrderPdf(order, companyName = "Nossa Empresa") {
+    const doc = new jsPDF();
+    
+    // Configurações
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.width;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    // Título
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('PEDIDO DE FARDAMENTO', pageWidth / 2, margin + 10, { align: 'center' });
+    
+    // Informações da empresa
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(companyName, pageWidth / 2, margin + 20, { align: 'center' });
+    
+    // Linha separadora
+    doc.setLineWidth(0.5);
+    doc.line(margin, margin + 25, pageWidth - margin, margin + 25);
+    
+    // Informações do pedido
+    let yPosition = margin + 35;
+    doc.setFontSize(11);
+    
+    // Número do pedido e status
+    doc.setFont(undefined, 'bold');
+    doc.text(`Pedido #${order.orderNumber}`, margin, yPosition);
+    
+    // Status com cor
+    const statusColors = {
+        'pending': [255, 193, 7],    // Amarelo
+        'delivered': [40, 167, 69],  // Verde
+        'cancelled': [220, 53, 69]   // Vermelho
+    };
+    const statusText = {
+        'pending': 'PENDENTE',
+        'delivered': 'ENTREGUE',
+        'cancelled': 'CANCELADO'
+    };
+    
+    const status = statusText[order.status] || 'PENDENTE';
+    const color = statusColors[order.status] || [0, 0, 0];
+    
+    doc.setTextColor(...color);
+    doc.text(status, pageWidth - margin - 30, yPosition);
+    doc.setTextColor(0, 0, 0); // Volta para preto
+    
+    // Dados do cliente
+    yPosition += 10;
+    doc.setFont(undefined, 'bold');
+    doc.text('Cliente:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.text(order.customerName, margin + 20, yPosition);
+    
+    yPosition += 7;
+    doc.setFont(undefined, 'bold');
+    doc.text('Telefone:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.text(formatPhone(order.customerPhone), margin + 25, yPosition);
+    
+    yPosition += 7;
+    doc.setFont(undefined, 'bold');
+    doc.text('Data do Pedido:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.text(formatDate(order.orderDate), margin + 40, yPosition);
+    
+    if (order.deliveryDate) {
+        yPosition += 7;
+        doc.setFont(undefined, 'bold');
+        doc.text('Data de Entrega:', margin, yPosition);
+        doc.setFont(undefined, 'normal');
+        doc.text(formatDate(order.deliveryDate), margin + 40, yPosition);
+    }
+    
+    // Tabela de itens
+    yPosition += 15;
+    
+    const tableData = order.items.map(item => [
+        item.type || '-',
+        item.name || '-',
+        item.size || '-',
+        item.quantity || 1,
+        formatCurrency(item.unitPrice || 0),
+        formatCurrency(item.subtotal || 0)
+    ]);
+    
+    doc.autoTable({
+        startY: yPosition,
+        head: [['Tipo', 'Descrição', 'Tamanho', 'Qtd', 'Valor Unit.', 'Subtotal']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+            fillColor: [41, 128, 185],
+            fontSize: 10
+        },
+        bodyStyles: {
+            fontSize: 9
+        },
+        columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 20, halign: 'center' },
+            3: { cellWidth: 15, halign: 'center' },
+            4: { cellWidth: 30, halign: 'right' },
+            5: { cellWidth: 30, halign: 'right' }
+        },
+        margin: { left: margin, right: margin }
+    });
+    
+    // Total
+    yPosition = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL:', pageWidth - margin - 60, yPosition);
+    doc.setFontSize(14);
+    doc.text(formatCurrency(order.totalAmount), pageWidth - margin, yPosition, { align: 'right' });
+    
+    // Observações
+    if (order.observations) {
+        yPosition += 15;
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Observações:', margin, yPosition);
+        yPosition += 7;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        
+        const obsLines = doc.splitTextToSize(order.observations, contentWidth);
+        obsLines.forEach(line => {
+            doc.text(line, margin, yPosition);
+            yPosition += 5;
+        });
+    }
+    
+    // Imagens anexadas
+    if (order.images && order.images.length > 0) {
+        doc.addPage();
+        yPosition = margin;
+        
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('IMAGENS ANEXADAS', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
+        
+        // Nota sobre as imagens
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text('As imagens podem ser visualizadas no sistema online.', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 5;
+        doc.text(`Total de imagens: ${order.images.length}`, pageWidth / 2, yPosition, { align: 'center' });
+    }
+    
+    // Rodapé
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text(
+            `Página ${i} de ${pageCount} - Gerado em ${new Date().toLocaleString('pt-BR')}`,
+            pageWidth / 2,
+            doc.internal.pageSize.height - 10,
+            { align: 'center' }
+        );
+    }
+    
+    return doc;
+}
+
+// Função para gerar relatório financeiro em PDF
+export function generateFinanceReportPdf(transactions, bankBalance, companyName = "Nossa Empresa") {
+    const doc = new jsPDF();
+    
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.width;
+    
+    // Cabeçalho
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('RELATÓRIO FINANCEIRO', pageWidth / 2, margin + 10, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(companyName, pageWidth / 2, margin + 20, { align: 'center' });
+    
+    // Período
+    doc.setFontSize(10);
+    const today = new Date().toLocaleDateString('pt-BR');
+    doc.text(`Gerado em: ${today}`, pageWidth / 2, margin + 28, { align: 'center' });
+    
+    // Linha separadora
+    doc.setLineWidth(0.5);
+    doc.line(margin, margin + 32, pageWidth - margin, margin + 32);
+    
+    // Resumo
+    let yPosition = margin + 42;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('RESUMO FINANCEIRO', margin, yPosition);
+    
+    yPosition += 10;
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    
+    // Calcula totais
+    const totals = transactions.reduce((acc, t) => {
+        if (t.type === 'income') {
+            acc.income += t.amount;
+        } else {
+            acc.expense += t.amount;
+        }
+        return acc;
+    }, { income: 0, expense: 0 });
+    
+    doc.text(`Saldo Bancário: ${formatCurrency(bankBalance)}`, margin, yPosition);
+    yPosition += 7;
+    doc.text(`Total de Entradas: ${formatCurrency(totals.income)}`, margin, yPosition);
+    yPosition += 7;
+    doc.text(`Total de Saídas: ${formatCurrency(totals.expense)}`, margin, yPosition);
+    yPosition += 7;
+    doc.setFont(undefined, 'bold');
+    doc.text(`Resultado: ${formatCurrency(totals.income - totals.expense)}`, margin, yPosition);
+    
+    // Tabela de transações
+    yPosition += 15;
+    
+    if (transactions.length > 0) {
+        const tableData = transactions.map(t => [
+            formatDate(t.date),
+            t.description,
+            t.category,
+            t.type === 'income' ? formatCurrency(t.amount) : '-',
+            t.type === 'expense' ? formatCurrency(t.amount) : '-',
+            t.status === 'a_receber' ? 'A Receber' : 'Pago'
+        ]);
+        
+        doc.autoTable({
+            startY: yPosition,
+            head: [['Data', 'Descrição', 'Categoria', 'Entrada', 'Saída', 'Status']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [52, 73, 94],
+                fontSize: 9
+            },
+            bodyStyles: {
+                fontSize: 8
+            },
+            columnStyles: {
+                0: { cellWidth: 25 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 30 },
+                3: { cellWidth: 25, halign: 'right' },
+                4: { cellWidth: 25, halign: 'right' },
+                5: { cellWidth: 20, halign: 'center' }
+            },
+            margin: { left: margin, right: margin }
+        });
+    } else {
+        doc.setFontSize(11);
+        doc.text('Nenhuma transação encontrada no período.', pageWidth / 2, yPosition, { align: 'center' });
+    }
+    
+    return doc;
+}
+
+// Função auxiliar para formatar moeda
+export function formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(value || 0);
+}
+
+// Função para formatar telefone
+export function formatPhone(phone) {
+    if (!phone) return '';
+    const cleaned = phone.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+    if (match) {
+        return `(${match[1]}) ${match[2]}-${match[3]}`;
+    }
+    return phone;
+}
+
+// Função para formatar data
+export function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('pt-BR');
+}
+
+// Função para formatar data e hora
+export function formatDateTime(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+// Função para validar CPF
+export function validateCPF(cpf) {
+    cpf = cpf.replace(/\D/g, '');
+    
+    if (cpf.length !== 11) return false;
+    
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(cpf)) return false;
+    
+    // Validação dos dígitos verificadores
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+        sum += parseInt(cpf[i]) * (10 - i);
+    }
+    let digit = 11 - (sum % 11);
+    if (digit >= 10) digit = 0;
+    if (parseInt(cpf[9]) !== digit) return false;
+    
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+        sum += parseInt(cpf[i]) * (11 - i);
+    }
+    digit = 11 - (sum % 11);
+    if (digit >= 10) digit = 0;
+    if (parseInt(cpf[10]) !== digit) return false;
+    
+    return true;
+}
+
+// Função para validar email
+export function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+}
+
+// Função para gerar número de pedido único
+export function generateOrderNumber() {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `${year}${month}${day}${random}`;
+}
+
+// Função para calcular dias entre datas
+export function daysBetween(date1, date2) {
+    const oneDay = 24 * 60 * 60 * 1000;
+    const firstDate = new Date(date1);
+    const secondDate = new Date(date2);
+    return Math.round(Math.abs((firstDate - secondDate) / oneDay));
+}
+
+// Função para obter saudação baseada no horário
+export function getGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+}
+
+// Timer de sessão
+let sessionTimer = null;
+let warningTimer = null;
+
+export function startSessionTimer(onExpire, onWarning) {
+    clearTimers();
+    
+    // Aviso em 25 minutos
+    warningTimer = setTimeout(() => {
+        if (onWarning) onWarning();
+    }, 25 * 60 * 1000);
+    
+    // Expiração em 30 minutos
+    sessionTimer = setTimeout(() => {
+        if (onExpire) onExpire();
+    }, 30 * 60 * 1000);
+}
+
+export function clearTimers() {
+    if (sessionTimer) {
+        clearTimeout(sessionTimer);
+        sessionTimer = null;
+    }
+    if (warningTimer) {
+        clearTimeout(warningTimer);
+        warningTimer = null;
+    }
+}
+
+export function resetTimers(onExpire, onWarning) {
+    clearTimers();
+    startSessionTimer(onExpire, onWarning);
+}
+
+// Função para debounce (evitar múltiplas chamadas)
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Função para throttle (limitar frequência de chamadas)
+export function throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+// Função para copiar texto para clipboard
+export async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch (err) {
+        console.error('Erro ao copiar:', err);
+        return false;
+    }
+}
+
+// Função para detectar dispositivo móvel
+export function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Função para sanitizar HTML (prevenir XSS)
+export function sanitizeHTML(str) {
+    const temp = document.createElement('div');
+    temp.textContent = str;
+    return temp.innerHTML;
+}
+
+// Função para fazer download de arquivo
+export function downloadFile(content, filename, type = 'text/plain') {
+    const blob = new Blob([content], { type });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+}
+
+// Função para converter base64 para blob
+export function base64ToBlob(base64, contentType = '') {
+    const byteCharacters = atob(base64.split(',')[1]);
+    const byteArrays = [];
+    
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        
+        for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+        }
+        
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+    }
+    
+    return new Blob(byteArrays, { type: contentType });
+}
+
+// Função para redimensionar imagem
+export async function resizeImage(file, maxWidth = 800, maxHeight = 800) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height *= maxWidth / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width *= maxHeight / height;
+                        height = maxHeight;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, file.type);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Exporta todas as funções como um objeto também (para compatibilidade)
+export default {
+    uploadToImgBB,
+    generateReceiptPdf,
+    generateOrderPdf,
+    generateFinanceReportPdf,
+    formatCurrency,
+    formatPhone,
+    formatDate,
+    formatDateTime,
+    validateCPF,
+    validateEmail,
+    generateOrderNumber,
+    daysBetween,
+    getGreeting,
+    startSessionTimer,
+    clearTimers,
+    resetTimers,
+    debounce,
+    throttle,
+    copyToClipboard,
+    isMobile,
+    sanitizeHTML,
+    downloadFile,
+    base64ToBlob,
+    resizeImage
 };
