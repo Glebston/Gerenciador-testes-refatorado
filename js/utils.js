@@ -1,12 +1,13 @@
 // =========================================================================
-// v4.2.2h - MIGRAÇÃO PARA MÓDULOS ES (ESM)
+// v4.2.2i - CORREÇÃO DA IMPORTAÇÃO ESM (Named Import)
 // =========================================================================
 // Importa jsPDF e autoTable diretamente de CDNs ESM (Skypack ou jsDelivr).
 // Isso elimina a dependência de scripts globais (window), race conditions e
 // a necessidade da função de polling (awaitPdfLibraries).
 
 import { jsPDF } from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm";
-import autoTable from "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/+esm";
+// CORREÇÃO v4.2.2i: Alterado de 'import autoTable from ...' para 'import { autoTable } from ...'
+import { autoTable } from "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/+esm";
 
 // =========================================================================
 
@@ -106,7 +107,7 @@ export const initializeIdleTimer = (dom, logoutHandler) => {
 
 /**
  * =========================================================================
- * v4.2.2h - FUNÇÃO DE POLLING REMOVIDA
+ * v4.2.2i - FUNÇÃO DE POLLING REMOVIDA
  * =========================================================================
  * A função 'awaitPdfLibraries' foi removida.
  * Os imports ESM no topo do arquivo garantem que jsPDF e autoTable
@@ -124,7 +125,7 @@ export const initializeIdleTimer = (dom, logoutHandler) => {
  */
 export const generateComprehensivePdf = async (orderId, allOrders, userCompanyName, showInfoModal) => {
     
-    // --- LÓGICA v4.2.2h: Bloco try/catch do awaitPdfLibraries removido ---
+    // --- LÓGICA v4.2.2i: Bloco try/catch do awaitPdfLibraries removido ---
     // (Não é mais necessário)
 
     showInfoModal("Iniciando geração do PDF...");
@@ -135,7 +136,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
     }
 
     try {
-        // --- MUDANÇA v4.2.2h: Instancia a partir do IMPORT 'jsPDF' ---
+        // --- MUDANÇA v4.2.2i: Instancia a partir do IMPORT 'jsPDF' ---
         const doc = new jsPDF('p', 'mm', 'a4'); 
         
         const A4_WIDTH = 210;
@@ -164,7 +165,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             [`Data de Entrega:`, `${order.deliveryDate ? new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}`]
         ];
         
-        // --- MUDANÇA v4.2.2h: Usa a função 'autoTable(doc, ...)' ---
+        // --- MUDANÇA v4.2.2i: Usa a função 'autoTable(doc, ...)' ---
         autoTable(doc, {
             body: clientInfo,
             startY: yPosition,
@@ -173,7 +174,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             columnStyles: { 0: { fontStyle: 'bold' } },
             didDrawPage: (data) => { yPosition = data.cursor.y; }
         });
-        // --- MUDANÇA v4.2.2h: Usa 'doc.lastAutoTable' ---
+        // --- MUDANÇA v4.2.2i: Usa 'doc.lastAutoTable' ---
         yPosition = doc.lastAutoTable.finalY + 5;
 
         // --- TABELA DE PEÇAS ---
@@ -232,7 +233,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             ]);
         });
 
-        // --- MUDANÇA v4.2.2h: Usa a função 'autoTable(doc, ...)' ---
+        // --- MUDANÇA v4.2.2i: Usa a função 'autoTable(doc, ...)' ---
         autoTable(doc, {
             head: tableHead,
             body: tableBody,
@@ -247,7 +248,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             },
             didDrawPage: (data) => { yPosition = data.cursor.y; }
         });
-        // --- MUDANÇA v4.2.2h: Usa 'doc.lastAutoTable' ---
+        // --- MUDANÇA v4.2.2i: Usa 'doc.lastAutoTable' ---
         yPosition = doc.lastAutoTable.finalY + 8;
 
         // --- OBSERVAÇÃO E FINANCEIRO ---
@@ -274,7 +275,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             ['RESTA PAGAR:', `R$ ${remaining.toFixed(2)}`]
         ];
 
-        // --- MUDANÇA v4.2.2h: Usa a função 'autoTable(doc, ...)' ---
+        // --- MUDANÇA v4.2.2i: Usa a função 'autoTable(doc, ...)' ---
         autoTable(doc, {
             body: financialDetails,
             startY: yPosition,
@@ -289,7 +290,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
             },
             didDrawPage: (data) => { yPosition = data.cursor.y; }
         });
-        // --- MUDANÇA v4.2.2h: Usa 'doc.lastAutoTable' ---
+        // --- MUDANÇA v4.2.2i: Usa 'doc.lastAutoTable' ---
         yPosition = doc.lastAutoTable.finalY;
 
         // --- IMAGENS ---
@@ -318,7 +319,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
                             resolve(canvas.toDataURL('image/jpeg', 0.9));
                         };
                         img.onerror = (err) => reject(new Error(`Falha ao carregar imagem: ${url}`));
-                        // v4.2.2h: Adiciona um cache buster para tentar evitar problemas de CORS/Cache
+                        // v4.2.2i: Adiciona um cache buster para tentar evitar problemas de CORS/Cache
                         img.src = url.includes('?') ? `${url}&v=${Date.now()}` : `${url}?v=${Date.now()}`;
                     });
 
@@ -349,14 +350,14 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
         showInfoModal("PDF gerado com sucesso!");
 
     } catch (error) {
-        console.error("Erro ao gerar PDF programático (v4.2.2h):", error);
+        console.error("Erro ao gerar PDF programático (v4.2.2i):", error);
         showInfoModal("Ocorreu um erro inesperado ao gerar o PDF.");
     }
 };
 
 /**
  * =========================================================================
- * v4.2.2h - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA (ESM)
+ * v4.2.2i - GERAÇÃO DE RECIBO DE QUITAÇÃO E ENTREGA (ESM)
  * =========================================================================
  * Gera um PDF de recibo de quitação E entrega.
  * Corrigido para usar imports ESM nativos.
@@ -366,7 +367,7 @@ export const generateComprehensivePdf = async (orderId, allOrders, userCompanyNa
  */
 export const generateReceiptPdf = async (orderData, userCompanyName, showInfoModal) => {
     
-    // --- LÓGICA v4.2.2h: Bloco try/catch do awaitPdfLibraries removido ---
+    // --- LÓGICA v4.2.2i: Bloco try/catch do awaitPdfLibraries removido ---
     // (Não é mais necessário)
     
     showInfoModal("Gerando recibo...");
@@ -399,7 +400,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         const amountPaid = orderData.downPayment || 0; // O fluxo de 'quitar' garante que downPayment == grandTotal
 
         // 3. Inicializa o Documento PDF
-        // --- MUDANÇA v4.2.2h: Instancia a partir do IMPORT 'jsPDF' ---
+        // --- MUDANÇA v4.2.2i: Instancia a partir do IMPORT 'jsPDF' ---
         const doc = new jsPDF('p', 'mm', 'a4');
         
         const A4_WIDTH = 210;
@@ -440,7 +441,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
             ['VALOR PAGO (QUITADO):', `R$ ${amountPaid.toFixed(2)}`]
         ];
         
-        // --- MUDANÇA v4.2.2h: Usa a função 'autoTable(doc, ...)' ---
+        // --- MUDANÇA v4.2.2i: Usa a função 'autoTable(doc, ...)' ---
         autoTable(doc, {
             body: financialDetails,
             startY: yPosition,
@@ -454,7 +455,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
             },
             didDrawPage: (data) => { yPosition = data.cursor.y; }
         });
-        // --- MUDANÇA v4.2.2h: Usa 'doc.lastAutoTable' ---
+        // --- MUDANÇA v4.2.2i: Usa 'doc.lastAutoTable' ---
         yPosition = doc.lastAutoTable.finalY + 10;
         
         // --- ITENS ENTREGUES (Nova Tabela) ---
@@ -463,7 +464,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         doc.text('Itens Entregues (Conferência)', MARGIN, yPosition);
         yPosition += 6;
         
-        // --- MUDANÇA v4.2.2h: Usa a função 'autoTable(doc, ...)' ---
+        // --- MUDANÇA v4.2.2i: Usa a função 'autoTable(doc, ...)' ---
         autoTable(doc, {
             head: [['Tipo da Peça', 'Quantidade Total']],
             body: tableBody,
@@ -472,7 +473,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
             headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
             didDrawPage: (data) => { yPosition = data.cursor.y; }
         });
-        // --- MUDANÇA v4.2.2h: Usa 'doc.lastAutoTable' ---
+        // --- MUDANÇA v4.2.2i: Usa 'doc.lastAutoTable' ---
         yPosition = doc.lastAutoTable.finalY + 15;
 
         // --- TEXTO DE DECLARAÇÃO (Novo) ---
@@ -510,7 +511,7 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
         showInfoModal("Recibo gerado com sucesso!");
 
     } catch (error) {
-        console.error("Erro ao gerar PDF do Recibo (v4.2.2h):", error);
+        console.error("Erro ao gerar PDF do Recibo (v4.2.2i):", error);
         // Mensagem de erro genérica, pois o carregamento da lib não é mais o problema
         showInfoModal("Não foi possível gerar o PDF do recibo. Ocorreu um erro interno.");
     }
