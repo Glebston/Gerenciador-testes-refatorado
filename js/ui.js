@@ -50,7 +50,6 @@ export const DOM = {
     closeOptionsModalBtn: document.getElementById('closeOptionsModalBtn'),
     partTypeList: document.getElementById('part-type-list'),
     partMaterialList: document.getElementById('part-material-list'),
-    customerList: document.getElementById('customer-list'), // <-- ADIÇÃO AQUI
     confirmModal: document.getElementById('confirmModal'),
     confirmModalMessage: document.getElementById('confirmModalMessage'),
     confirmOkBtn: document.getElementById('confirmOkBtn'),
@@ -1276,18 +1275,7 @@ export const updateSourceSelectionUI = (selectedSource) => {
 
 export const populateDatalists = (partTypes, materialTypes) => {
     DOM.partTypeList.innerHTML = partTypes.map(opt => `<option value="${opt}"></option>`).join('');
-  M.partMaterialList.innerHTML = materialTypes.map(opt => `<option value="${opt}"></option>`).join('');
-};
-
-// <-- ADIÇÃO AQUI: Nova função exportada -->
-/**
- * Preenche o datalist de clientes com nomes.
- * @param {Array<string>} customerNames - Um array de nomes de clientes únicos.
- */
-export const populateCustomerDatalist = (customerNames) => {
-    if (DOM.customerList) {
-        DOM.customerList.innerHTML = customerNames.map(name => `<option value="${name}"></option>`).join('');
-    }
+    DOM.partMaterialList.innerHTML = materialTypes.map(opt => `<option value="${opt}"></option>`).join('');
 };
 
 export const openOptionsModal = (type, options) => {
