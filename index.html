@@ -121,7 +121,6 @@
                         <h3 class="text-lg font-bold mb-4 text-green-800">Top 5 Receitas por Categoria</h3>
                         <div id="topIncomesByCategory">
                             <p class="text-sm text-gray-500">Nenhum dado no período.</p>
-section: 4, row: 8, range: 137-142
                         </div>
                     </div>
                 </div>
@@ -148,7 +147,6 @@ section: 4, row: 8, range: 137-142
                                     <th class="py-2 px-4">Origem</th>
                                     <th class="py-2 px-4 text-right">Valor</th>
                                     <th class="py-2 px-4 text-right">Ações</th>
-section: 4, row: 20, range: 177-182
                                 </tr>
                             </thead>
                             <tbody id="transactionsList"></tbody>
@@ -163,7 +161,6 @@ section: 4, row: 20, range: 177-182
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
             <div class="p-6 border-b">
                 <h3 id="priceTableModalTitle" class="text-2xl font-bold text-gray-800">Tabela de Preços</h3>
-section: 5, row: 5, range: 200-202
             </div>
             <div id="priceTableContainer" class="p-6 overflow-y-auto">
             </div>
@@ -178,7 +175,6 @@ section: 5, row: 5, range: 200-202
         </div>
     </div>
     <div id="orderModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter">
-section: 6, row: 1, range: 219-219
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-y-auto">
             <form id="orderForm" class="p-8 space-y-6">
                 <h2 id="modalTitle" class="text-2xl font-bold">Novo Pedido</h2>
@@ -186,7 +182,7 @@ section: 6, row: 1, range: 219-219
                 <fieldset class="border p-4 rounded-lg">
                     <legend class="text-lg font-semibold px-2">1. Dados do Cliente e Datas</legend>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                                                <input type="text" id="clientName" placeholder="Nome do Cliente" class="p-2 border rounded-md w-full col-span-1 sm:col-span-2 lg:col-span-2" required list="customer-list">
+                        <input type="text" id="clientName" placeholder="Nome do Cliente" class="p-2 border rounded-md w-full col-span-1 sm:col-span-2 lg:col-span-2" required>
                         <input type="text" id="clientPhone" placeholder="Telefone" class="p-2 border rounded-md w-full" maxlength="15"> <select id="orderStatus" class="p-2 border rounded-md w-full bg-white">
                             <option value="Pendente">Pendente</option>
                             <option value="Confirmado">Confirmado</option>
@@ -196,11 +192,9 @@ section: 6, row: 1, range: 219-219
                         </select>
                         <div>
                             <label for="orderDate" class="text-xs">Data Pedido</label>
-a: 1
                             <input type="date" id="orderDate" class="p-2 border rounded-md w-full">
                         </div>
-              
-                      <div>
+                        <div>
                             <label for="deliveryDate" class="text-xs">Data Entrega</label>
                             <input type="date" id="deliveryDate" class="p-2 border rounded-md w-full">
                         </div>
@@ -209,7 +203,6 @@ a: 1
                 <fieldset class="border p-4 rounded-lg">
                     <legend class="text-lg font-semibold px-2">2. Arquivos da Arte (Mockup)</legend>
                     <input type="file" id="mockupFiles" class="p-2 border rounded-md w-full mt-1 text-sm text-gray-500" accept="image/*" multiple>
-section: 6, row: 23, range: 252-254
                     <div id="existingFilesContainer" class="text-sm text-gray-600 mt-2 space-y-1"></div>
                 </fieldset>
                 <fieldset class="border p-4 rounded-lg">
@@ -220,7 +213,6 @@ section: 6, row: 23, range: 252-254
                 <fieldset class="border p-4 rounded-lg">
                     <legend class="text-lg font-semibold px-2">4. Observação Geral</legend>
                     <textarea id="generalObservation" class="w-full p-2 border rounded-md mt-2" rows="3" placeholder="Detalhes gerais, acabamentos, etc."></textarea>
-section: 6, row: 33, range: 265-267
                 </fieldset>
                 <fieldset class="border p-4 rounded-lg">
                     <legend class="text-lg font-semibold px-2">5. Financeiro</legend>
@@ -231,7 +223,6 @@ section: 6, row: 33, range: 265-267
                             <div class="flex items-center relative">
                                 <span class="text-gray-500 absolute left-3">R$</span>
                                 <input type="number" step="0.01" id="downPayment" class="p-2 border rounded-md w-full pl-10">
-section: 6, row: 42, range: 275-279
                             </div>
                         </div>
                         <div>
@@ -242,7 +233,6 @@ section: 6, row: 42, range: 275-279
                             <label for="discount" class="text-xs font-semibold text-gray-600">Desconto (R$)</label>
                             <div class="flex items-center relative">
                                 <span class="text-gray-500 absolute left-3">R$</span>
-section: 6, row: 51, range: 286-289
                                 <input type="number" step="0.01" id="discount" class="p-2 border rounded-md w-full pl-10">
                             </div>
                         </div>
@@ -251,11 +241,10 @@ section: 6, row: 51, range: 286-289
                             <p id="grandTotal" class="text-2xl font-bold text-blue-600">R$ 0,00</p>
                         </div>
                         <div class="bg-red-100 p-3 rounded-lg text-center md:col-span-1">
-section: 6, row: 59, range: 298-301
                             <p class="text-sm text-red-700">Resta Pagar</p>
                             <p id="remainingTotal" class="text-2xl font-bold text-red-600">R$ 0,00</p>
                         </div>
-                  S </div>
+                    </div>
                 </fieldset>
                 <div class="flex flex-col sm:flex-row justify-end items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mt-8">
                     <div id="uploadIndicator" class="text-sm text-blue-600 font-semibold hidden">Salvando...</div>
@@ -269,7 +258,6 @@ section: 6, row: 59, range: 298-301
     <div id="infoModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[80] hidden modal-enter">
         <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
             <p id="infoModalMessage" class="text-lg font-semibold text-center mb-4"></p>
-section: 8, row: 3, range: 318-320
             <div class="flex justify-center">
                 <button id="infoModalCloseBtn" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">OK</button>
             </div>
@@ -283,7 +271,6 @@ section: 8, row: 3, range: 318-320
         </div>
     </div>
     <div id="optionsModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[60] hidden modal-enter">
-section: 10, row: 1, range: 333-333
         <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
             <h3 id="optionsModalTitle" class="text-xl font-bold mb-4">Gerenciar Opções</h3>
             <div id="optionsList" class="space-y-2 max-h-60 overflow-y-auto mb-4"></div>
@@ -305,11 +292,9 @@ section: 10, row: 1, range: 333-333
         </div>
     </div>
     <div id="initialBalanceModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter">
-section: 12, row: 1, range: 355-355
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full">
             <h3 class="text-xl font-bold mb-4">Ajustar Saldo Inicial</h3>
             <p class="text-gray-600 mb-6">Informe o valor de partida para o cálculo do seu saldo em conta. Este valor pode ser o saldo atual da sua conta bancária.</p>
-section: 12, row: 4, range: 358-360
             <div class="flex items-center relative">
                 <span class="text-gray-500 absolute left-3">R$</span>
                 <input type="number" step="0.01" id="initialBalanceInput" class="p-2 border rounded-md w-full pl-10 text-lg" placeholder="0.00">
@@ -321,7 +306,6 @@ section: 12, row: 4, range: 358-360
         </div>
     </div>
     <div id="transactionModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden modal-enter">
-section: 13, row: 1, range: 371-371
         <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
             <h3 id="transactionModalTitle" class="text-xl font-bold mb-4">Novo Lançamento</h3>
             <form id="transactionForm">
@@ -331,7 +315,6 @@ section: 13, row: 1, range: 371-371
                     <div>
                         <label for="transactionDate" class="text-sm font-semibold">Data</label>
                         <input type="date" id="transactionDate" class="p-2 border rounded-md w-full" required>
-section: 13, row: 10, range: 380-382
                     </div>
                     <div>
                         <label for="transactionDescription" class="text-sm font-semibold">Descrição</label>
@@ -339,7 +322,6 @@ section: 13, row: 10, range: 380-382
                     </div>
                     <div>
                         <label for="transactionCategory" class="text-sm font-semibold">Categoria</label>
-section: 13, row: 17, range: 387-389
                         <input type="text" id="transactionCategory" placeholder="Ex: Matéria-prima, Venda" class="p-2 border rounded-md w-full">
                     </div>
                     <div>
@@ -359,7 +341,6 @@ section: 13, row: 17, range: 387-389
                         <label for="transactionAmount" class="text-sm font-semibold">Valor</label>
                         <div class="flex items-center relative">
                             <span class="text-gray-500 absolute left-3">R$</span>
-t>
                             <input type="number" step="0.01" id="transactionAmount" class="p-2 border rounded-md w-full pl-10" required>
                         </div>
                     </div>
@@ -371,7 +352,6 @@ t>
                                 <span class="ml-2 text-sm text-gray-700">Recebido</span>
                             </label>
                             <label class="flex items-center">
-section: 13, row: 45, range: 418-422
                                 <input type="radio" name="transactionStatus" value="a_receber" class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
                                 <span class="ml-2 text-sm text-gray-700">A Receber</span>
                             </a
@@ -379,7 +359,6 @@ section: 13, row: 45, range: 418-422
                     </div>
                 </div>
                 <div class="flex justify-end gap-4 mt-6">
-section: 13, row: 51, range: 428-430
                     <button type="button" id="cancelTransactionBtn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
                     <button type="submit" id="saveTransactionBtn" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Salvar</button>
                 </div>
@@ -393,18 +372,15 @@ section: 13, row: 51, range: 428-430
             <p class="text-gray-600 mb-6">Por favor, digite o e-mail da sua conta para enviarmos um link de redefinição.</p>
             <div class="space-y-4">
                 <input type="email" id="resetEmailInput" placeholder="E-mail" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-section: 14, row: 6, range: 442-444
             </div>
             <div class="flex justify-end gap-4 mt-6">
                 <button id="cancelResetBtn" class="flex-1 bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300">Cancelar</button>
                 <button id="sendResetEmailBtn" class="flex-1 bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700">Enviar E-mail</button>
-    _email">
             </div>
         </div>
     </div>
 
     <div id="cookieBanner" class="hidden fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 shadow-lg z-50 flex flex-col sm:flex-row items-center justify-center gap-4 text-center sm:text-left">
-section: 15, row: 2, range: 452-452
         <p class="text-sm">
             Utilizamos tecnologias essenciais para o funcionamento da plataforma. Ao continuar, você concorda com o uso delas. Para mais detalhes, acesse nossa 
             <a href="https://paglucrobr.com/gerenciador-privacidade" target="_blank" rel="noopener noreferrer" class="font-semibold underline hover:text-gray-300">Política de Privacidade</a>.
@@ -425,12 +401,10 @@ section: 15, row: 2, range: 452-452
                     <button type="button" class="manage-options-btn p-1 absolute right-1 bg-gray-200 rounded-md hover:bg-gray-300" data-type="materialTypes">⚙️</button>
                 </div>
                 <input type="text" placeholder="Cor Principal" class="p-2 border rounded-md w-full part-color-main">
-section: 16, row: 13, range: 472-475
             </div>
             <div class="flex items-center space-x-2 pt-2 border-t">
                <span class="text-sm font-semibold text-gray-600">Tipo de Entrada:</span>
                <button type="button" class="part-type-selector" data-type="comum">Comum</button>
-section: 16, row: 17, range: 479-480
                <button type="button" class="part-type-selector" data-type="detalhado">Detalhado</button>
             </div>
             <div class="part-content-container mt-2"></div>
@@ -454,11 +428,9 @@ section: 16, row: 17, range: 479-480
     </template>
     <template id="detalhadoPartContentTemplate">
         <div class="detailed-items-list space-y-2 mt-3">
-section: 19, row: 2, range: 502-503
             <div class="grid grid-cols-12 gap-2 font-semibold text-sm px-1">
                 <div class="col-span-5">Nome</div>
                 <div class="col-span-4">Tamanho</div>
-section: 19, row: 5, range: 506-507
                 <div class="col-span-2">Número</div>
                 <div class="col-span-1"></div>
             </div>
@@ -491,18 +463,15 @@ section: 19, row: 5, range: 506-507
 
     <datalist id="part-type-list"></datalist>
     <datalist id="part-material-list"></datalist>
-        <datalist id="customer-list"></datalist>
 
     <div id="backupReminderBanner" class="hidden fixed bottom-5 right-5 w-full max-w-sm bg-white rounded-lg shadow-lg p-4 border toast-enter z-50">
         <div class="flex items-start gap-3">
             <div class="flex-shrink-0 text-blue-500">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-section: 21, row: 5, range: 544-546
                 </svg>
             </div>
             <div class="flex-1">
-section: 21, row: 8, range: 549-550
                 <p class="text-sm font-semibold text-gray-800">Lembrete de Backup</p>
                 <p class="text-sm text-gray-600 mt-1">Seu último backup foi há mais de 7 dias. Mantenha seus dados seguros!</p>
                 <div class="mt-3 flex gap-2">
