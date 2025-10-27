@@ -35,9 +35,6 @@ let currentOrdersView = 'pending';
 let partCounter = 0;
 let currentOptionType = ''; // Para o modal de gerenciamento de opções
 
-// <-- NOVO ESTADO: Mini-CRM -->
-let customerMap = new Map(); // Armazena { clientName: latestPhoneNumber }
-
 const defaultOptions = {
     partTypes: ['Gola redonda manga curta', 'Gola redonda manga longa', 'Gola redonda manga longa com capuz', 'Gola redonda manga curta (sublimada na frente)', 'Gola polo manga curta', 'Gola polo manga longa', 'Gola V manga curta', 'Gola V manga longa', 'Short', 'Calça'],
     materialTypes: ['Malha fria', 'Drifity', 'Cacharrel', 'PP', 'Algodão Fio 30', 'TNT drive', 'Piquê', 'Brim']
@@ -47,29 +44,6 @@ const defaultOptions = {
 // ========================================================
 // PARTE 3: LÓGICA DE INICIALIZAÇÃO E AUTENTICAÇÃO
 // ========================================================
-
-/**
- * <-- NOVA FUNÇÃO: Atualiza o mapa de clientes e o datalist -->
- * Cria/atualiza o mapa de clientes a partir dos pedidos e popula o datalist na UI.
- */
-const updateCustomerData = () => {
-    customerMap.clear();
-    const orders = getAllOrders(); // Pega do cache do orderService
-
-    // Ordena por data (mais recente primeiro) para pegar o último telefone
-    orders.sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
-
-    orders.forEach(order => {
-        if (order.clientName && !customerMap.has(order.clientName)) {
-            customerMap.set(order.clientName, order.clientPhone || '');
-        }
-    });
-
-    // Popula o datalist na UI
-    const customerNames = Array.from(customerMap.keys()).sort(); // Ordena alfabeticamente para o datalist
-    UI.populateCustomerDatalist(customerNames);
-};
-
 
 const initializeAppLogic = async (user) => {
     const userMappingRef = doc(db, "user_mappings", user.uid);
@@ -100,14 +74,11 @@ const initializeAppLogic = async (user) => {
         UI.renderOrders(getAllOrders(), currentOrdersView);
         UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig);
         // A tabela de preços é renderizada quando o modal é aberto
-
-        // <-- NOVA LÓGICA: Popula dados de clientes após carregar pedidos -->
-        updateCustomerData();
         
         // --- FIM DA INICIALIZAÇÃO REATIVA ---
         
         initializeIdleTimer(UI.DOM, handleLogout);
-        initializeAndPopulateDatalists(); // Datalists de peças/materiais
+        initializeAndPopulateDatalists();
         checkBackupReminder();
         triggerAutoBackupIfNeeded();
         UI.updateNavButton(currentDashboardView);
@@ -132,7 +103,6 @@ const cleanupApplication = () => {
     userCompanyId = null;
     userCompanyName = null;
     userBankBalanceConfig = { initialBalance: 0 };
-    customerMap.clear(); // <-- Limpa o mapa de clientes no logout
 };
 
 onAuthStateChanged(auth, (user) => {
@@ -165,7 +135,7 @@ const handleOrderChange = (type, order, viewType) => {
         if (isDelivered) {
             // DEVE ser removido da view 'pending'
             UI.removeOrderCard(order.id);
-            // return; // Não retorna aqui, pois precisamos atualizar o customerMap abaixo
+            return;
         } else {
             // Se NÃO está 'Entregue', processa normalmente
             switch (type) {
@@ -187,7 +157,7 @@ const handleOrderChange = (type, order, viewType) => {
         if (!isDelivered) {
             // DEVE ser removido da view 'delivered'
             UI.removeOrderCard(order.id);
-            // return; // Não retorna aqui, pois precisamos atualizar o customerMap abaixo
+            return;
         } else {
              // Se ESTÁ 'Entregue', processa normalmente
             switch (type) {
@@ -204,11 +174,6 @@ const handleOrderChange = (type, order, viewType) => {
         }
     }
     // --- FIM DA CORREÇÃO ---
-
-    // <-- NOVA LÓGICA: Atualiza mapa/datalist de clientes em caso de adição/modificação -->
-    if (type === 'added' || type === 'modified') {
-        updateCustomerData();
-    }
 };
 
 /**
@@ -368,7 +333,6 @@ const processRestore = async (ordersToRestore, transactionsToRestore) => {
             UI.showInfoModal(`Dados substituídos com sucesso.`);
         }
     }
-    updateCustomerData(); // <-- Atualiza o mapa de clientes após restauração
 };
 
 const handleRestore = (event) => {
@@ -642,18 +606,6 @@ UI.DOM.cancelBtn.addEventListener('click', () => UI.DOM.orderModal.classList.add
 UI.DOM.addPartBtn.addEventListener('click', () => { partCounter++; UI.addPart({}, partCounter); });
 UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
 UI.DOM.discount.addEventListener('input', UI.updateFinancials);
-
-// <-- NOVO LISTENER: Autopreenchimento do Telefone -->
-UI.DOM.clientName.addEventListener('input', (e) => {
-    const enteredName = e.target.value;
-    if (customerMap.has(enteredName)) {
-        const phone = customerMap.get(enteredName);
-        if (phone) {
-            UI.DOM.clientPhone.value = UI.formatPhoneNumber(phone); // Formata ao preencher
-        }
-    }
-});
-
 
 UI.DOM.clientPhone.addEventListener('input', (e) => {
   e.target.value = UI.formatPhoneNumber(e.target.value);
