@@ -35,6 +35,8 @@ let currentOrdersView = 'pending';
 let partCounter = 0;
 let currentOptionType = ''; // Para o modal de gerenciamento de opções
 
+// <-- ESTADO 'customerMap' REMOVIDO -->
+
 const defaultOptions = {
     partTypes: ['Gola redonda manga curta', 'Gola redonda manga longa', 'Gola redonda manga longa com capuz', 'Gola redonda manga curta (sublimada na frente)', 'Gola polo manga curta', 'Gola polo manga longa', 'Gola V manga curta', 'Gola V manga longa', 'Short', 'Calça'],
     materialTypes: ['Malha fria', 'Drifity', 'Cacharrel', 'PP', 'Algodão Fio 30', 'TNT drive', 'Piquê', 'Brim']
@@ -44,6 +46,9 @@ const defaultOptions = {
 // ========================================================
 // PARTE 3: LÓGICA DE INICIALIZAÇÃO E AUTENTICAÇÃO
 // ========================================================
+
+// <-- FUNÇÃO 'updateCustomerData' REMOVIDA -->
+
 
 const initializeAppLogic = async (user) => {
     const userMappingRef = doc(db, "user_mappings", user.uid);
@@ -74,11 +79,13 @@ const initializeAppLogic = async (user) => {
         UI.renderOrders(getAllOrders(), currentOrdersView);
         UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig);
         // A tabela de preços é renderizada quando o modal é aberto
+
+        // <-- CHAMADA 'updateCustomerData()' REMOVIDA -->
         
         // --- FIM DA INICIALIZAÇÃO REATIVA ---
         
         initializeIdleTimer(UI.DOM, handleLogout);
-        initializeAndPopulateDatalists();
+        initializeAndPopulateDatalists(); // Datalists de peças/materiais
         checkBackupReminder();
         triggerAutoBackupIfNeeded();
         UI.updateNavButton(currentDashboardView);
@@ -103,6 +110,7 @@ const cleanupApplication = () => {
     userCompanyId = null;
     userCompanyName = null;
     userBankBalanceConfig = { initialBalance: 0 };
+    // <-- LIMPEZA 'customerMap.clear()' REMOVIDA -->
 };
 
 onAuthStateChanged(auth, (user) => {
@@ -135,7 +143,7 @@ const handleOrderChange = (type, order, viewType) => {
         if (isDelivered) {
             // DEVE ser removido da view 'pending'
             UI.removeOrderCard(order.id);
-            return;
+            return; // <-- Retorna aqui, pois a UI não será afetada (diferente da versão com Mini-CRM)
         } else {
             // Se NÃO está 'Entregue', processa normalmente
             switch (type) {
@@ -157,9 +165,9 @@ const handleOrderChange = (type, order, viewType) => {
         if (!isDelivered) {
             // DEVE ser removido da view 'delivered'
             UI.removeOrderCard(order.id);
-            return;
+            return; // <-- Retorna aqui, pois a UI não será afetada (diferente da versão com Mini-CRM)
         } else {
-             // Se ESTÁ 'Entregue', processa normalmente
+             // Se ESTÁ 'Entregue', processa normally
             switch (type) {
                 case 'added':
                     UI.addOrderCard(order, viewType);
@@ -174,6 +182,8 @@ const handleOrderChange = (type, order, viewType) => {
         }
     }
     // --- FIM DA CORREÇÃO ---
+
+    // <-- CHAMADA 'updateCustomerData()' REMOVIDA -->
 };
 
 /**
@@ -333,6 +343,7 @@ const processRestore = async (ordersToRestore, transactionsToRestore) => {
             UI.showInfoModal(`Dados substituídos com sucesso.`);
         }
     }
+    // <-- CHAMADA 'updateCustomerData()' REMOVIDA -->
 };
 
 const handleRestore = (event) => {
@@ -607,8 +618,10 @@ UI.DOM.addPartBtn.addEventListener('click', () => { partCounter++; UI.addPart({}
 UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
 UI.DOM.discount.addEventListener('input', UI.updateFinancials);
 
+// <-- LISTENER 'input' no clientName REMOVIDO -->
+
 UI.DOM.clientPhone.addEventListener('input', (e) => {
-  e.target.value = UI.formatPhoneNumber(e.target.value);
+ e.target.value = UI.formatPhoneNumber(e.target.value);
 });
 
 UI.DOM.partsContainer.addEventListener('click', (e) => { 
