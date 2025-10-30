@@ -50,7 +50,6 @@ export const DOM = {
     closeOptionsModalBtn: document.getElementById('closeOptionsModalBtn'),
     partTypeList: document.getElementById('part-type-list'),
     partMaterialList: document.getElementById('part-material-list'),
-    // customerList: document.getElementById('customer-list'), // <-- REMOVIDO DAQUI
     confirmModal: document.getElementById('confirmModal'),
     confirmModalMessage: document.getElementById('confirmModalMessage'),
     confirmOkBtn: document.getElementById('confirmOkBtn'),
@@ -494,8 +493,24 @@ export const renderOrders = (allOrders, currentOrdersView) => {
         });
     } else { 
         ordersToRender = allOrders.filter(o => o.orderStatus === 'Entregue');
+        
+        // ==========================================================
+        // INÍCIO DA CORREÇÃO v4.2.4
+        // ==========================================================
+        
         // Ordena por data (mais novos primeiro)
-        ordersToRender.sort((a, b) => (b.deliveryDate || 0).localeCompare(a.deliveryDate || 0));
+        ordersToRender.sort((a, b) => {
+            // Usamos '0000-01-01' como fallback para garantir que sejam strings
+            // e que datas ausentes sejam tratadas como as mais antigas.
+            const dateA = a.deliveryDate || '0000-01-01';
+            const dateB = b.deliveryDate || '0000-01-01';
+            // dateB.localeCompare(dateA) ordena em ordem decrescente (mais novo primeiro)
+            return dateB.localeCompare(dateA);
+        });
+        
+        // ==========================================================
+        // FIM DA CORREÇÃO v4.2.4
+        // ==========================================================
     }
 
     if (ordersToRender.length === 0) {
@@ -1278,8 +1293,6 @@ export const populateDatalists = (partTypes, materialTypes) => {
     DOM.partTypeList.innerHTML = partTypes.map(opt => `<option value="${opt}"></option>`).join('');
     DOM.partMaterialList.innerHTML = materialTypes.map(opt => `<option value="${opt}"></option>`).join('');
 };
-
-// <-- REMOVIDO DAQUI: Função 'populateCustomerDatalist' -->
 
 export const openOptionsModal = (type, options) => {
     const title = type === 'partTypes' ? 'Tipos de Peça' : 'Tipos de Material';
