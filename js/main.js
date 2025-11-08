@@ -12,7 +12,8 @@ import { handleLogin, handleLogout, handleForgotPassword } from './auth.js';
 
 // Módulos de Serviços de Negócio
 import { initializeOrderService, saveOrder, deleteOrder, getOrderById, getAllOrders, cleanupOrderService } from './services/orderService.js';
-import { initializeFinanceService, saveTransaction, deleteTransaction, markTransactionAsPaid, saveInitialBalance, getAllTransactions, cleanupFinanceService } from './services/financeService.js';
+// v5.0: Importa a nova função de busca
+import { initializeFinanceService, saveTransaction, deleteTransaction, markTransactionAsPaid, saveInitialBalance, getAllTransactions, cleanupFinanceService, getTransactionByOrderId } from './services/financeService.js';
 import { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } from './services/pricingService.js';
 
 // Módulo de Utilitários
@@ -225,8 +226,8 @@ const handleFinanceChange = (type, transaction, config) => {
     const searchTerm = UI.DOM.transactionSearchInput.value.toLowerCase();
     const passesSearchFilter = transaction.description.toLowerCase().includes(searchTerm);
 
+    // v5.0: Se a transação for modificada e não passar mais no filtro, deve ser removida da lista
     if (!passesDateFilter || !passesSearchFilter) {
-        // Se não passa no filtro, pode ser que o item estivesse na lista e precise ser removido
         if (type === 'modified' || type === 'removed') {
              UI.removeTransactionRow(transaction.id);
         }
@@ -388,13 +389,26 @@ const checkBackupReminder = () => {
     }
 };
 
+// v5.0: Atualizada para coletar os novos campos financeiros
 const collectFormData = () => {
+    // Coleta a origem (Banco/Caixa) do adiantamento
+    const activeSourceEl = UI.DOM.downPaymentSourceContainer.querySelector('.source-selector.active');
+    
     const data = {
         clientName: UI.DOM.clientName.value, clientPhone: UI.DOM.clientPhone.value, orderStatus: UI.DOM.orderStatus.value,
         orderDate: UI.DOM.orderDate.value, deliveryDate: UI.DOM.deliveryDate.value, generalObservation: UI.DOM.generalObservation.value,
-        parts: [], downPayment: parseFloat(UI.DOM.downPayment.value) || 0, discount: parseFloat(UI.DOM.discount.value) || 0,
-        paymentMethod: UI.DOM.paymentMethod.value, mockupUrls: Array.from(UI.DOM.existingFilesContainer.querySelectorAll('a')).map(a => a.href)
+        parts: [], 
+        downPayment: parseFloat(UI.DOM.downPayment.value) || 0, 
+        discount: parseFloat(UI.DOM.discount.value) || 0,
+        paymentMethod: UI.DOM.paymentMethod.value, 
+        mockupUrls: Array.from(UI.DOM.existingFilesContainer.querySelectorAll('a')).map(a => a.href),
+        
+        // Novos campos da "Ponte" (salvos no pedido para referência futura)
+        downPaymentDate: UI.DOM.downPaymentDate.value || new Date().toISOString().split('T')[0],
+        paymentFinSource: activeSourceEl ? activeSourceEl.dataset.source : 'banco', // Padrão 'banco' se nada selecionado
+        paymentFinStatus: UI.DOM.downPaymentStatusAReceber.checked ? 'a_receber' : 'pago'
     };
+    
     UI.DOM.partsContainer.querySelectorAll('.part-item').forEach(p => {
         const id = p.dataset.partId;
         const part = { type: p.querySelector('.part-type').value, material: p.querySelector('.part-material').value, colorMain: p.querySelector('.part-color-main').value, partInputType: p.dataset.partType, sizes: {}, details: [], specifics: [], unitPriceStandard: 0, unitPriceSpecific: 0, unitPrice: 0 };
@@ -475,25 +489,70 @@ UI.DOM.addOrderBtn.addEventListener('click', () => {
     UI.DOM.orderModal.classList.remove('hidden'); 
 });
 
+// ========================================================
+// v5.0: LÓGICA DA "PONTE" (FORMULÁRIO DE PEDIDO)
+// ========================================================
 UI.DOM.orderForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     UI.DOM.saveBtn.disabled = true; 
     UI.DOM.uploadIndicator.classList.remove('hidden');
     
     try {
+        // --- ETAPA 1: Upload de Arquivos (Como antes) ---
         const files = UI.DOM.mockupFiles.files;
         const uploadPromises = Array.from(files).map(file => fileToBase64(file).then(uploadToImgBB));
         const newUrls = (await Promise.all(uploadPromises)).filter(Boolean);
         
-        const orderData = collectFormData();
+        // --- ETAPA 2: Coletar Dados e Salvar Pedido ---
+        const orderData = collectFormData(); // Agora coleta os dados financeiros (downPaymentDate, etc.)
         orderData.mockupUrls.push(...newUrls);
         
         const orderId = UI.DOM.orderId.value;
-        const savedOrderId = await saveOrder(orderData, orderId);
+        // Salva o pedido primeiro para garantir que temos um ID
+        const savedOrderId = await saveOrder(orderData, orderId); 
         
+        // --- ETAPA 3: A LÓGICA DA "PONTE" FINANCEIRA ---
+        const downPaymentAmount = parseFloat(orderData.downPayment) || 0;
+        const clientName = orderData.clientName;
+
+        // Busca por uma transação de adiantamento JÁ VINCULADA a este pedido
+        const existingTransaction = await getTransactionByOrderId(savedOrderId);
+
+        // Cenário A: O usuário inseriu um valor de adiantamento
+        if (downPaymentAmount > 0) {
+            // Monta o objeto da transação
+            const transactionData = {
+                date: orderData.downPaymentDate,
+                description: `Adiantamento Pedido - ${clientName}`,
+                amount: downPaymentAmount,
+                type: 'income',
+                category: 'Adiantamento de Pedido', // Categoria fixa para busca
+                source: orderData.paymentFinSource,
+                status: orderData.paymentFinStatus,
+                orderId: savedOrderId // O VÍNCULO SÊNIOR
+            };
+            
+            // Se já existia uma transação (modo de edição), ATUALIZA.
+            if (existingTransaction) {
+                await saveTransaction(transactionData, existingTransaction.id);
+            } 
+            // Se não existia, CRIA.
+            else {
+                await saveTransaction(transactionData, null);
+            }
+        } 
+        // Cenário B: O usuário NÃO inseriu valor (ou zerou na edição)
+        else {
+            // Se existia uma transação (usuário apagou o valor), DELETA ela.
+            if (existingTransaction) {
+                await deleteTransaction(existingTransaction.id);
+            }
+            // Se não existia, não faz nada (correto).
+        }
+
+        // --- ETAPA 4: Feedback (Como antes) ---
         UI.DOM.orderModal.classList.add('hidden');
         
-        // --- CORREÇÃO v4.2.2: Lógica do Recibo ---
         if (orderData.orderStatus === 'Finalizado' || orderData.orderStatus === 'Entregue') {
             const generate = await UI.showConfirmModal(
                 "Pedido salvo com sucesso! Deseja gerar o Recibo de Quitação e Entrega?", 
@@ -501,14 +560,12 @@ UI.DOM.orderForm.addEventListener('submit', async (e) => {
                 "Não, obrigado"
             );
             if (generate) {
-                // Precisamos passar os dados completos para a função
                 const fullOrderData = { ...orderData, id: savedOrderId };
                 await generateReceiptPdf(fullOrderData, userCompanyName, UI.showInfoModal);
             }
         } else {
              UI.showInfoModal("Pedido salvo com sucesso!");
         }
-        // --- FIM DA CORREÇÃO ---
 
     } catch (error) { 
         console.error("Erro ao salvar pedido:", error);
@@ -518,6 +575,9 @@ UI.DOM.orderForm.addEventListener('submit', async (e) => {
         UI.DOM.uploadIndicator.classList.add('hidden'); 
     }
 });
+// ========================================================
+// FIM DA LÓGICA DA "PONTE"
+// ========================================================
 
 UI.DOM.ordersList.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -542,10 +602,24 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
         UI.DOM.discount.value = ''; 
         UI.DOM.downPayment.value = '';
         UI.updateFinancials();
+        
+        // v5.0: Reseta os campos financeiros da ponte para o padrão
+        UI.DOM.downPaymentDate.value = new Date().toISOString().split('T')[0];
+        UI.DOM.downPaymentStatusPago.checked = true;
+        UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, 'banco');
+        
     } else if (btn.classList.contains('delete-btn')) {
         UI.showConfirmModal("Tem certeza que deseja excluir este pedido?", "Excluir", "Cancelar")
-          .then(confirmed => {
-              if (confirmed) deleteOrder(id);
+          .then(async (confirmed) => { // v5.0: Adiciona lógica de exclusão de transação
+              if (confirmed) {
+                  // Primeiro, busca se há transação vinculada
+                  const existingTransaction = await getTransactionByOrderId(id);
+                  if (existingTransaction) {
+                      await deleteTransaction(existingTransaction.id);
+                  }
+                  // Depois, deleta o pedido
+                  await deleteOrder(id);
+              }
           });
     } else if (btn.classList.contains('view-btn')) {
         UI.viewOrder(order);
@@ -575,11 +649,38 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                 const updatedOrderData = { ...order };
                 updatedOrderData.downPayment = totalValue;
                 updatedOrderData.orderStatus = 'Entregue';
+                
+                // v5.0: Atualiza os dados da "Ponte" para refletir a quitação
+                updatedOrderData.downPaymentDate = new Date().toISOString().split('T')[0];
+                updatedOrderData.paymentFinStatus = 'pago';
+                // (Mantém a origem 'paymentFinSource' que já existia ou 'banco' como padrão)
+                updatedOrderData.paymentFinSource = updatedOrderData.paymentFinSource || 'banco';
 
                 // 3. Salva no banco
                 saveOrder(updatedOrderData, id)
-                    .then(async () => { // Adiciona 'async'
-                        // 4. Pergunta sobre o recibo (A NOVA LÓGICA)
+                    .then(async () => { 
+                        
+                        // v5.0: ATUALIZA O FINANCEIRO AUTOMATICAMENTE
+                        // A lógica da "Ponte" (Etapa 3) precisa ser replicada aqui para o atalho
+                        const existingTransaction = await getTransactionByOrderId(id);
+                        const transactionData = {
+                            date: updatedOrderData.downPaymentDate,
+                            description: `Adiantamento Pedido - ${updatedOrderData.clientName}`,
+                            amount: totalValue,
+                            type: 'income',
+                            category: 'Adiantamento de Pedido',
+                            source: updatedOrderData.paymentFinSource,
+                            status: 'pago',
+                            orderId: id
+                        };
+                        
+                        if (existingTransaction) {
+                            await saveTransaction(transactionData, existingTransaction.id);
+                        } else {
+                            await saveTransaction(transactionData, null);
+                        }
+                        
+                        // 4. Pergunta sobre o recibo (A LÓGICA ANTIGA)
                         const generate = await UI.showConfirmModal(
                             "Pedido quitado e movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
                             "Sim, gerar recibo",
@@ -624,23 +725,39 @@ UI.DOM.clientPhone.addEventListener('input', (e) => {
  e.target.value = UI.formatPhoneNumber(e.target.value);
 });
 
-UI.DOM.partsContainer.addEventListener('click', (e) => { 
-    const btn = e.target.closest('button.manage-options-btn'); 
-    if (btn) { 
-        currentOptionType = btn.dataset.type; 
+// v5.0: Listener de clique movido para o modal (para pegar os botões de opção E os de origem)
+UI.DOM.orderModal.addEventListener('click', (e) => {
+    // Gerenciador de Opções (Peça/Material)
+    const optionsBtn = e.target.closest('button.manage-options-btn'); 
+    if (optionsBtn) { 
+        currentOptionType = optionsBtn.dataset.type; 
         UI.openOptionsModal(currentOptionType, getOptionsFromStorage(currentOptionType)); 
-    } 
-});
-UI.DOM.existingFilesContainer.addEventListener('click', (e) => { 
-    if (e.target.classList.contains('remove-mockup-btn')) {
-        e.target.parentElement.remove(); 
+    }
+    
+    // Gerenciador de Arquivos
+    const removeMockupBtn = e.target.closest('.remove-mockup-btn');
+    if (removeMockupBtn) {
+        removeMockupBtn.parentElement.remove(); 
+    }
+    
+    // v5.0: Novo: Gerenciador do seletor de Origem (Banco/Caixa)
+    const sourceBtn = e.target.closest('#downPaymentSourceContainer .source-selector');
+    if (sourceBtn) {
+        UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, sourceBtn.dataset.source);
     }
 });
+// (Listeners antigos de partContainer e existingFilesContainer removidos e consolidados acima)
 
 // --- Funcionalidades Financeiras ---
 const handleEditTransaction = (id) => {
     const transaction = getAllTransactions().find(t => t.id === id);
     if (!transaction) return;
+    
+    // v5.0: Impede a edição de transações vinculadas a pedidos
+    if (transaction.orderId) {
+        UI.showInfoModal("Este lançamento foi gerado por um pedido e não pode ser editado manualmente. Por favor, edite o pedido correspondente.");
+        return;
+    }
 
     UI.DOM.transactionId.value = transaction.id; 
     UI.DOM.transactionDate.value = transaction.date; 
@@ -649,7 +766,8 @@ const handleEditTransaction = (id) => {
     UI.DOM.transactionType.value = transaction.type; 
     UI.DOM.transactionCategory.value = transaction.category || '';
     
-    UI.updateSourceSelectionUI(transaction.source || 'banco');
+    // v5.0: Atualiza a chamada da função
+    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, transaction.source || 'banco');
     
     const isIncome = transaction.type === 'income';
     UI.DOM.transactionStatusContainer.classList.toggle('hidden', !isIncome);
@@ -669,7 +787,8 @@ UI.DOM.addIncomeBtn.addEventListener('click', () => {
     UI.DOM.transactionDate.value = new Date().toISOString().split('T')[0]; 
     UI.DOM.transactionStatusContainer.classList.remove('hidden'); 
     UI.DOM.pago.checked = true; 
-    UI.updateSourceSelectionUI('banco'); 
+    // v5.0: Atualiza a chamada da função
+    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
     UI.DOM.transactionModal.classList.remove('hidden'); 
 });
 
@@ -680,7 +799,8 @@ UI.DOM.addExpenseBtn.addEventListener('click', () => {
     UI.DOM.transactionModalTitle.textContent = 'Nova Despesa'; 
     UI.DOM.transactionDate.value = new Date().toISOString().split('T')[0]; 
     UI.DOM.transactionStatusContainer.classList.add('hidden'); 
-    UI.updateSourceSelectionUI('banco'); 
+    // v5.0: Atualiza a chamada da função
+    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
     UI.DOM.transactionModal.classList.remove('hidden'); 
 });
 
@@ -701,6 +821,7 @@ UI.DOM.transactionForm.addEventListener('submit', async (e) => {
         status: UI.DOM.transactionType.value === 'income' 
             ? (UI.DOM.a_receber.checked ? 'a_receber' : 'pago') 
             : 'pago'
+        // v5.0: orderId não é definido aqui, pois este é um lançamento MANUAL
     };
     if (!data.date || !data.description || isNaN(data.amount) || data.amount <= 0) {
         UI.showInfoModal("Por favor, preencha todos os campos com valores válidos.");
@@ -721,8 +842,15 @@ UI.DOM.transactionsList.addEventListener('click', (e) => {
     
     const id = btn.dataset.id;
     if (btn.classList.contains('edit-transaction-btn')) {
-        handleEditTransaction(id);
+        handleEditTransaction(id); // A função interna agora bloqueia edição de itens de pedido
     } else if (btn.classList.contains('delete-transaction-btn')) {
+        // v5.0: Impede a exclusão de transações vinculadas
+        const transaction = getAllTransactions().find(t => t.id === id);
+        if (transaction && transaction.orderId) {
+            UI.showInfoModal("Este lançamento foi gerado por um pedido e não pode ser excluído manualmente. Por favor, edite o pedido correspondente.");
+            return;
+        }
+        
         UI.showConfirmModal("Tem certeza que deseja excluir este lançamento?", "Excluir", "Cancelar")
           .then(ok => ok && deleteTransaction(id));
     } else if (btn.classList.contains('mark-as-paid-btn')) {
@@ -843,10 +971,12 @@ UI.DOM.priceTableContainer.addEventListener('click', (e) => {
         }
     }
 });
+
+// v5.0: Atualiza o listener para usar a nova assinatura da função
 UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.source-selector');
     if (target) {
-        UI.updateSourceSelectionUI(target.dataset.source);
+        UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, target.dataset.source);
     }
 });
 
