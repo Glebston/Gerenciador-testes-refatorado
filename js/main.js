@@ -12,8 +12,18 @@ import { handleLogin, handleLogout, handleForgotPassword } from './auth.js';
 
 // Módulos de Serviços de Negócio
 import { initializeOrderService, saveOrder, deleteOrder, getOrderById, getAllOrders, cleanupOrderService } from './services/orderService.js';
-// v5.0: Importa a nova função de busca
-import { initializeFinanceService, saveTransaction, deleteTransaction, markTransactionAsPaid, saveInitialBalance, getAllTransactions, cleanupFinanceService, getTransactionByOrderId } from './services/financeService.js';
+// v5.0.1: Importa a nova função de exclusão em lote
+import { 
+    initializeFinanceService, 
+    saveTransaction, 
+    deleteTransaction, 
+    markTransactionAsPaid, 
+    saveInitialBalance, 
+    getAllTransactions, 
+    cleanupFinanceService, 
+    getTransactionByOrderId,
+    deleteAllTransactionsByOrderId // <--- NOVO
+} from './services/financeService.js';
 import { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } from './services/pricingService.js';
 
 // Módulo de Utilitários
@@ -534,7 +544,15 @@ UI.DOM.orderForm.addEventListener('submit', async (e) => {
             
             // Se já existia uma transação (modo de edição), ATUALIZA.
             if (existingTransaction) {
-                await saveTransaction(transactionData, existingTransaction.id);
+                // v5.0.1: Verifica se o valor mudou. Se não mudou, não faz nada.
+                // Isso impede que a "quitação" (que tem valor diferente) sobrescreva o adiantamento.
+                // Apenas atualiza se o valor for O MESMO do adiantamento salvo no pedido.
+                // Esta lógica só se aplica ao salvar o adiantamento.
+                // Se o `orderStatus` for 'Entregue', significa que uma quitação pode ter ocorrido,
+                // então a lógica de "Quitar e Entregar" é que deve prevalecer.
+                if (orderData.orderStatus !== 'Entregue') {
+                     await saveTransaction(transactionData, existingTransaction.id);
+                }
             } 
             // Se não existia, CRIA.
             else {
@@ -610,15 +628,17 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
         
     } else if (btn.classList.contains('delete-btn')) {
         UI.showConfirmModal("Tem certeza que deseja excluir este pedido?", "Excluir", "Cancelar")
-          .then(async (confirmed) => { // v5.0: Adiciona lógica de exclusão de transação
+          .then(async (confirmed) => {
               if (confirmed) {
-                  // Primeiro, busca se há transação vinculada
-                  const existingTransaction = await getTransactionByOrderId(id);
-                  if (existingTransaction) {
-                      await deleteTransaction(existingTransaction.id);
+                  try {
+                      // v5.0.1: Exclui TODAS as transações (adiantamento, quitação, etc.)
+                      await deleteAllTransactionsByOrderId(id);
+                      // Depois, deleta o pedido
+                      await deleteOrder(id);
+                  } catch (error) {
+                      console.error("Erro ao excluir pedido e finanças:", error);
+                      UI.showInfoModal("Falha ao excluir. Verifique o console.");
                   }
-                  // Depois, deleta o pedido
-                  await deleteOrder(id);
               }
           });
     } else if (btn.classList.contains('view-btn')) {
@@ -630,9 +650,11 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
             "Cancelar"
         ).then(confirmed => {
             if (confirmed) {
-                // --- CORREÇÃO v4.2.2: Lógica do Recibo no Atalho ---
+                // ========================================================
+                // INÍCIO DA CORREÇÃO v5.0.1: Lógica de Quitação
+                // ========================================================
                 
-                // 1. Calcula o valor total
+                // 1. Calcula o valor total (como antes)
                 let totalValue = 0;
                 (order.parts || []).forEach(p => {
                     const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
@@ -645,42 +667,39 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                 });
                 totalValue -= (order.discount || 0);
 
-                // 2. Prepara os dados atualizados
+                // 2. Prepara os dados atualizados do PEDIDO
                 const updatedOrderData = { ...order };
-                updatedOrderData.downPayment = totalValue;
+                const adiantamentoExistente = updatedOrderData.downPayment || 0;
+                updatedOrderData.downPayment = totalValue; // Marca o pedido como 100% pago
                 updatedOrderData.orderStatus = 'Entregue';
-                
-                // v5.0: Atualiza os dados da "Ponte" para refletir a quitação
-                updatedOrderData.downPaymentDate = new Date().toISOString().split('T')[0];
-                updatedOrderData.paymentFinStatus = 'pago';
-                // (Mantém a origem 'paymentFinSource' que já existia ou 'banco' como padrão)
-                updatedOrderData.paymentFinSource = updatedOrderData.paymentFinSource || 'banco';
 
-                // 3. Salva no banco
+                // 3. Calcula o valor RESTANTE a ser pago
+                const valorRestante = totalValue - adiantamentoExistente;
+                
+                // 4. Salva o PEDIDO
                 saveOrder(updatedOrderData, id)
                     .then(async () => { 
                         
-                        // v5.0: ATUALIZA O FINANCEIRO AUTOMATICAMENTE
-                        // A lógica da "Ponte" (Etapa 3) precisa ser replicada aqui para o atalho
-                        const existingTransaction = await getTransactionByOrderId(id);
-                        const transactionData = {
-                            date: updatedOrderData.downPaymentDate,
-                            description: `Adiantamento Pedido - ${updatedOrderData.clientName}`,
-                            amount: totalValue,
-                            type: 'income',
-                            category: 'Adiantamento de Pedido',
-                            source: updatedOrderData.paymentFinSource,
-                            status: 'pago',
-                            orderId: id
-                        };
+                        // 5. ATUALIZA O FINANCEIRO (A NOVA LÓGICA)
                         
-                        if (existingTransaction) {
-                            await saveTransaction(transactionData, existingTransaction.id);
-                        } else {
+                        // Se o valor restante for > 0, cria um NOVO lançamento de "Quitação"
+                        if (valorRestante > 0) {
+                            const today = new Date().toISOString().split('T')[0];
+                            const transactionData = {
+                                date: today,
+                                description: `Quitação Pedido - ${updatedOrderData.clientName}`,
+                                amount: valorRestante,
+                                type: 'income',
+                                category: 'Quitação de Pedido', // Nova categoria
+                                source: updatedOrderData.paymentFinSource || 'banco', // Usa a origem do adiantamento, ou banco
+                                status: 'pago',
+                                orderId: id // Vincula ao pedido
+                            };
+                            // Cria a transação de quitação (não edita a de adiantamento)
                             await saveTransaction(transactionData, null);
                         }
                         
-                        // 4. Pergunta sobre o recibo (A LÓGICA ANTIGA)
+                        // 6. Pergunta sobre o recibo (Lógica antiga)
                         const generate = await UI.showConfirmModal(
                             "Pedido quitado e movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
                             "Sim, gerar recibo",
@@ -694,7 +713,9 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
                         console.error("Erro ao quitar e entregar pedido:", error);
                         UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
                     });
-                // --- FIM DA CORREÇÃO ---
+                // ========================================================
+                // FIM DA CORREÇÃO v5.0.1
+                // ========================================================
             }
         });
     }
