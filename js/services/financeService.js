@@ -158,6 +158,41 @@ export const getTransactionByOrderId = async (orderId) => {
 };
 
 /**
+ * Exclui TODAS as transações financeiras vinculadas a um ID de pedido.
+ * @param {string} orderId - O ID do pedido.
+ */
+export const deleteAllTransactionsByOrderId = async (orderId) => {
+    if (!transactionsCollection || !orderId) return;
+
+    // 1. Encontra todas as transações (Adiantamento, Quitação, etc.)
+    const q = query(
+        transactionsCollection, 
+        where("orderId", "==", orderId)
+    );
+
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return; // Nenhuma transação para excluir.
+        }
+
+        // 2. Cria um batch para excluir todas de uma vez
+        const batch = writeBatch(db);
+        querySnapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+
+        // 3. Executa a exclusão
+        await batch.commit();
+
+    } catch (error) {
+        console.error("Erro ao excluir transações por orderId:", error);
+        // Propaga o erro para o main.js tratar, se necessário
+        throw new Error("Falha ao excluir finanças vinculadas.");
+    }
+};
+
+/**
  * Retorna uma cópia da lista completa de todas as transações do cache local.
  * @returns {Array}
  */
