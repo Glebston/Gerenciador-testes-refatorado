@@ -32,6 +32,9 @@ import { initializeIdleTimer, resetIdleTimer, fileToBase64, uploadToImgBB, gener
 // Módulo de Interface do Usuário (UI) - Importando tudo sob o namespace 'UI'
 import * as UI from './ui.js';
 
+// Módulos de Listeners (Refatoração v4.3.6+)
+import { initializeAuthListeners } from './listeners/authListeners.js';
+
 
 // ========================================================
 // PARTE 2: ESTADO GLOBAL E CONFIGURAÇÕES DA APLICAÇÃO
@@ -154,7 +157,7 @@ const handleOrderChange = (type, order, viewType) => {
         if (isDelivered) {
             // DEVE ser removido da view 'pending'
             UI.removeOrderCard(order.id);
-            return; // <-- Retorna aqui, pois a UI não será afetada (diferente da versão com Mini-CRM)
+            return; // <-- Retorna here, pois a UI não será afetada (diferente da versão com Mini-CRM)
         } else {
             // Se NÃO está 'Entregue', processa normalmente
             switch (type) {
@@ -176,7 +179,7 @@ const handleOrderChange = (type, order, viewType) => {
         if (!isDelivered) {
             // DEVE ser removido da view 'delivered'
             UI.removeOrderCard(order.id);
-            return; // <-- Retorna aqui, pois a UI não será afetada (diferente da versão com Mini-CRM)
+            return; // <-- Retorna here, pois a UI não será afetada (diferente da versão com Mini-CRM)
         } else {
              // Se ESTÁ 'Entregue', processa normally
             switch (type) {
@@ -447,10 +450,11 @@ const collectFormData = () => {
 window.addEventListener('load', () => UI.handleCookieConsent());
 ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => window.addEventListener(event, resetIdleTimer));
 
-// --- Autenticação e Navegação Principal ---
-UI.DOM.loginForm.addEventListener('submit', (e) => { e.preventDefault(); handleLogin(UI.DOM.loginEmail.value, UI.DOM.loginPassword.value); });
-UI.DOM.forgotPasswordBtn.addEventListener('click', handleForgotPassword);
-UI.DOM.logoutBtn.addEventListener('click', handleLogout);
+// --- Inicialização dos Módulos de Listeners ---
+initializeAuthListeners(); // <-- NOVO: Inicializa os listeners de autenticação
+
+// --- Navegação Principal ---
+// (Listeners de login, logout e forgotPassword movidos para authListeners.js)
 
 UI.DOM.financeDashboardBtn.addEventListener('click', () => {
     currentDashboardView = currentDashboardView === 'orders' ? 'finance' : 'orders';
@@ -732,6 +736,7 @@ UI.DOM.ordersList.addEventListener('click', async (e) => {
                     );
                     if (generate) {
                         await generateReceiptPdf(updatedOrderData, userCompanyName, UI.showInfoModal);
+
                     }
                 }
                 // Se 'settlementData' for null (usuário cancelou o mini-modal), não faz nada.
