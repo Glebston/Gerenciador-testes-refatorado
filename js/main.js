@@ -36,6 +36,7 @@ import * as UI from './ui.js';
 import { initializeAuthListeners } from './listeners/authListeners.js';
 import { initializeNavigationListeners } from './listeners/navigationListeners.js';
 import { initializeOrderListeners } from './listeners/orderListeners.js';
+import { initializeFinanceListeners } from './listeners/financeListeners.js';
 
 
 // ========================================================
@@ -404,8 +405,6 @@ const checkBackupReminder = () => {
     }
 };
 
-// <-- FUNÇÃO 'collectFormData' MOVIDA PARA 'orderListeners.js' -->
-
 // ========================================================
 // PARTE 6: EVENT LISTENERS (A "COLA" DA APLICAÇÃO)
 // ========================================================
@@ -430,7 +429,6 @@ initializeNavigationListeners({
     }
 });
 
-// v4.3.8: Injeção de Dependência para os listeners de Pedidos
 initializeOrderListeners({
     getState: () => ({ partCounter }),
     setState: (newState) => {
@@ -448,148 +446,26 @@ initializeOrderListeners({
         getTransactionByOrderId,
         deleteAllTransactionsByOrderId
     },
-    userCompanyName: () => userCompanyName // Passa como função para garantir o valor atualizado
+    userCompanyName: () => userCompanyName 
 });
 
-
-// --- Funcionalidades Financeiras ---
-const handleEditTransaction = (id) => {
-    const transaction = getAllTransactions().find(t => t.id === id);
-    if (!transaction) return;
-    
-    // v5.0: Impede a edição de transações vinculadas a pedidos
-    if (transaction.orderId) {
-        UI.showInfoModal("Este lançamento foi gerado por um pedido e não pode ser editado manualmente. Por favor, edite o pedido correspondente.");
-        return;
-    }
-
-    UI.DOM.transactionId.value = transaction.id; 
-    UI.DOM.transactionDate.value = transaction.date; 
-    UI.DOM.transactionDescription.value = transaction.description;
-    UI.DOM.transactionAmount.value = transaction.amount; 
-    UI.DOM.transactionType.value = transaction.type; 
-    UI.DOM.transactionCategory.value = transaction.category || '';
-    
-    // v5.0: Atualiza a chamada da função
-    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, transaction.source || 'banco');
-    
-    const isIncome = transaction.type === 'income';
-    UI.DOM.transactionStatusContainer.classList.toggle('hidden', !isIncome);
-    if (isIncome) {
-        (transaction.status === 'a_receber' ? UI.DOM.a_receber : UI.DOM.pago).checked = true;
-    }
-    
-    UI.DOM.transactionModalTitle.textContent = isIncome ? 'Editar Entrada' : 'Editar Despesa';
-    UI.DOM.transactionModal.classList.remove('hidden');
-};
-
-UI.DOM.addIncomeBtn.addEventListener('click', () => { 
-    UI.DOM.transactionForm.reset(); 
-    UI.DOM.transactionId.value = ''; 
-    UI.DOM.transactionType.value = 'income'; 
-    UI.DOM.transactionModalTitle.textContent = 'Nova Entrada'; 
-    UI.DOM.transactionDate.value = new Date().toISOString().split('T')[0]; 
-    UI.DOM.transactionStatusContainer.classList.remove('hidden'); 
-    UI.DOM.pago.checked = true; 
-    // v5.0: Atualiza a chamada da função
-    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
-    UI.DOM.transactionModal.classList.remove('hidden'); 
-});
-
-UI.DOM.addExpenseBtn.addEventListener('click', () => { 
-    UI.DOM.transactionForm.reset(); 
-    UI.DOM.transactionId.value = ''; 
-    UI.DOM.transactionType.value = 'expense'; 
-    UI.DOM.transactionModalTitle.textContent = 'Nova Despesa'; 
-    UI.DOM.transactionDate.value = new Date().toISOString().split('T')[0]; 
-    UI.DOM.transactionStatusContainer.classList.add('hidden'); 
-    // v5.0: Atualiza a chamada da função
-    UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
-    UI.DOM.transactionModal.classList.remove('hidden'); 
-});
-
-UI.DOM.transactionForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const selectedSourceEl = UI.DOM.transactionSourceContainer.querySelector('.source-selector.active');
-    if (!selectedSourceEl) {
-        UI.showInfoModal("Por favor, selecione a Origem (Banco ou Caixa).");
-        return;
-    }
-    const data = {
-        date: UI.DOM.transactionDate.value,
-        description: UI.DOM.transactionDescription.value,
-        amount: parseFloat(UI.DOM.transactionAmount.value),
-        type: UI.DOM.transactionType.value,
-        category: UI.DOM.transactionCategory.value.trim(),
-        source: selectedSourceEl.dataset.source,
-        status: UI.DOM.transactionType.value === 'income' 
-            ? (UI.DOM.a_receber.checked ? 'a_receber' : 'pago') 
-            : 'pago'
-        // v5.0: orderId não é definido aqui, pois este é um lançamento MANUAL
-    };
-    if (!data.date || !data.description || isNaN(data.amount) || data.amount <= 0) {
-        UI.showInfoModal("Por favor, preencha todos os campos com valores válidos.");
-        return;
-    }
-    try {
-        await saveTransaction(data, UI.DOM.transactionId.value);
-        UI.DOM.transactionModal.classList.add('hidden');
-    } catch (error) {
-        console.error("Erro ao salvar transação:", error);
-        UI.showInfoModal("Não foi possível salvar o lançamento. Verifique sua conexão e tente novamente.");
-    }
-});
-
-UI.DOM.transactionsList.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn || !btn.dataset.id) return;
-    
-    const id = btn.dataset.id;
-    if (btn.classList.contains('edit-transaction-btn')) {
-        handleEditTransaction(id); // A função interna agora bloqueia edição de itens de pedido
-    } else if (btn.classList.contains('delete-transaction-btn')) {
-        // v5.0: Impede a exclusão de transações vinculadas
-        const transaction = getAllTransactions().find(t => t.id === id);
-        if (transaction && transaction.orderId) {
-            UI.showInfoModal("Este lançamento foi gerado por um pedido e não pode ser excluído manualmente. Por favor, edite o pedido correspondente.");
-            return;
+// v4.3.9: Injeção de Dependência para os listeners Financeiros
+initializeFinanceListeners({
+    services: {
+        saveTransaction,
+        deleteTransaction,
+        markTransactionAsPaid,
+        getAllTransactions,
+        saveInitialBalance
+    },
+    getConfig: () => userBankBalanceConfig,
+    setConfig: (newState) => {
+        if (newState.initialBalance !== undefined) {
+            userBankBalanceConfig.initialBalance = newState.initialBalance;
         }
-        
-        UI.showConfirmModal("Tem certeza que deseja excluir este lançamento?", "Excluir", "Cancelar")
-          .then(ok => ok && deleteTransaction(id));
-    } else if (btn.classList.contains('mark-as-paid-btn')) {
-        markTransactionAsPaid(id);
     }
 });
 
-// Filtros do Dashboard Financeiro - agora renderizam TUDO (KPIs e Lista)
-UI.DOM.periodFilter.addEventListener('change', () => { 
-    UI.DOM.customPeriodContainer.classList.toggle('hidden', UI.DOM.periodFilter.value !== 'custom'); 
-    UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig); 
-});
-
-[UI.DOM.startDateInput, UI.DOM.endDateInput, UI.DOM.transactionSearchInput].forEach(element => {
-    if(element) element.addEventListener('input', () => UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig));
-});
-// ---
-
-UI.DOM.adjustBalanceBtn.addEventListener('click', () => {
-    UI.DOM.initialBalanceInput.value = (userBankBalanceConfig.initialBalance || 0).toFixed(2);
-    UI.DOM.initialBalanceModal.classList.remove('hidden');
-});
-
-UI.DOM.saveBalanceBtn.addEventListener('click', async () => {
-    const newBalance = parseFloat(UI.DOM.initialBalanceInput.value);
-    if (isNaN(newBalance)) {
-        UI.showInfoModal("Por favor, insira um valor numérico válido.");
-        return;
-    }
-    await saveInitialBalance(newBalance);
-    userBankBalanceConfig.initialBalance = newBalance;
-    // Renderiza KPIs e lista, pois o saldo em conta mudou
-    UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig);
-    UI.DOM.initialBalanceModal.classList.add('hidden');
-});
 
 // --- Listeners de Modais Genéricos e Opções ---
 // v4.2.7: Adiciona o botão de cancelar do novo modal
@@ -674,14 +550,6 @@ UI.DOM.priceTableContainer.addEventListener('click', (e) => {
                   if (ok) deletePriceItem(itemId); // O listener cuidará de remover da UI
               });
         }
-    }
-});
-
-// v5.0: Atualiza o listener para usar a nova assinatura da função
-UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
-    const target = e.target.closest('.source-selector');
-    if (target) {
-        UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, target.dataset.source);
     }
 });
 
