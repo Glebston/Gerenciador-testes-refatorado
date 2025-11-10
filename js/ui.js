@@ -133,6 +133,15 @@ export const DOM = {
     downPaymentStatusContainer: document.getElementById('downPaymentStatusContainer'),
     downPaymentStatusPago: document.querySelector('input[name="downPaymentStatus"][value="pago"]'),
     downPaymentStatusAReceber: document.querySelector('input[name="downPaymentStatus"][value="a_receber"]'),
+
+    // v4.2.7: Modal de Quitação
+    settlementModal: document.getElementById('settlementModal'),
+    settlementOrderId: document.getElementById('settlementOrderId'),
+    settlementAmountDisplay: document.getElementById('settlementAmountDisplay'),
+    settlementDate: document.getElementById('settlementDate'),
+    settlementSourceContainer: document.getElementById('settlementSourceContainer'),
+    settlementCancelBtn: document.getElementById('settlementCancelBtn'),
+    settlementConfirmBtn: document.getElementById('settlementConfirmBtn'),
 };
 
 // Funções de Modais
@@ -188,6 +197,64 @@ export const showConfirmModal = (message, okText = "OK", cancelText = "Cancelar"
         DOM.confirmCancelBtn.addEventListener('click', cancelListener, { once: true });
     });
 };
+
+// v4.2.7: Novo Modal de Quitação
+export const showSettlementModal = (orderId, amount) => {
+    return new Promise((resolve) => {
+        DOM.settlementOrderId.value = orderId;
+        DOM.settlementAmountDisplay.textContent = `R$ ${amount.toFixed(2)}`;
+        DOM.settlementDate.value = new Date().toISOString().split('T')[0];
+        
+        // Define 'banco' como padrão ao abrir
+        updateSourceSelectionUI(DOM.settlementSourceContainer, 'banco');
+
+        DOM.settlementModal.classList.remove('hidden');
+        DOM.settlementDate.focus(); // Foco na data
+
+        const handleConfirm = () => {
+            const selectedSourceEl = DOM.settlementSourceContainer.querySelector('.source-selector.active');
+            if (!selectedSourceEl) {
+                // Feedback sutil se nenhuma origem for selecionada
+                const container = DOM.settlementSourceContainer;
+                container.classList.add('ring-2', 'ring-red-500', 'rounded-md');
+                setTimeout(() => container.classList.remove('ring-2', 'ring-red-500', 'rounded-md'), 1000);
+                return;
+            }
+            
+            const data = {
+                date: DOM.settlementDate.value,
+                source: selectedSourceEl.dataset.source
+            };
+            cleanupAndResolve(data);
+        };
+
+        const handleCancel = () => {
+            cleanupAndResolve(null);
+        };
+        
+        // v4.2.7: Listener de clique interno para os seletores de origem do modal
+        const handleSourceClick = (e) => {
+             const target = e.target.closest('.source-selector');
+             if (target) {
+                updateSourceSelectionUI(DOM.settlementSourceContainer, target.dataset.source);
+             }
+        };
+
+        const cleanupAndResolve = (value) => {
+            DOM.settlementModal.classList.add('hidden');
+            DOM.settlementConfirmBtn.removeEventListener('click', handleConfirm);
+            DOM.settlementCancelBtn.removeEventListener('click', handleCancel);
+            DOM.settlementSourceContainer.removeEventListener('click', handleSourceClick); // Limpa o listener de origem
+            resolve(value);
+        };
+
+        // Adiciona listeners
+        DOM.settlementConfirmBtn.addEventListener('click', handleConfirm, { once: false }); // 'once: false' por causa da validação
+        DOM.settlementCancelBtn.addEventListener('click', handleCancel, { once: true });
+        DOM.settlementSourceContainer.addEventListener('click', handleSourceClick);
+    });
+};
+// Fim v4.2.7
 
 // Funções de UI Geral
 export const updateNavButton = (currentDashboardView) => {
