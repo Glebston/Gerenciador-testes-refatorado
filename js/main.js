@@ -597,7 +597,8 @@ UI.DOM.orderForm.addEventListener('submit', async (e) => {
 // FIM DA LÓGICA DA "PONTE"
 // ========================================================
 
-UI.DOM.ordersList.addEventListener('click', (e) => {
+// v4.2.7: O listener agora é ASYNC para suportar o 'await' do modal de quitação
+UI.DOM.ordersList.addEventListener('click', async (e) => {
     const btn = e.target.closest('button');
     if (!btn || !btn.dataset.id) return;
 
@@ -644,80 +645,105 @@ UI.DOM.ordersList.addEventListener('click', (e) => {
     } else if (btn.classList.contains('view-btn')) {
         UI.viewOrder(order);
     } else if (btn.classList.contains('settle-and-deliver-btn')) {
-        UI.showConfirmModal(
-            "Tem certeza de que deseja quitar e marcar este pedido como 'Entregue'?",
-            "Sim, Quitar e Entregar",
-            "Cancelar"
-        ).then(confirmed => {
-            if (confirmed) {
-                // ========================================================
-                // INÍCIO DA CORREÇÃO v5.0.1: Lógica de Quitação
-                // ========================================================
-                
-                // 1. Calcula o valor total (como antes)
-                let totalValue = 0;
-                (order.parts || []).forEach(p => {
-                    const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
-                    const specificQty = (p.specifics || []).length;
-                    const detailedQty = (p.details || []).length;
-                    const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
-                    const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
-                    const detailedSub = detailedQty * (p.unitPrice || 0);
-                    totalValue += standardSub + specificSub + detailedSub;
-                });
-                totalValue -= (order.discount || 0);
+        // ========================================================
+        // INÍCIO DA CORREÇÃO v4.2.7: Lógica de Quitação com Mini-Modal
+        // ========================================================
+        try {
+            // 1. Calcula o valor total (como antes)
+            let totalValue = 0;
+            (order.parts || []).forEach(p => {
+                const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
+                const specificQty = (p.specifics || []).length;
+                const detailedQty = (p.details || []).length;
+                const standardSub = standardQty * (p.unitPriceStandard !== undefined ? p.unitPriceStandard : p.unitPrice || 0);
+                const specificSub = specificQty * (p.unitPriceSpecific !== undefined ? p.unitPriceSpecific : p.unitPrice || 0);
+                const detailedSub = detailedQty * (p.unitPrice || 0);
+                totalValue += standardSub + specificSub + detailedSub;
+            });
+            totalValue -= (order.discount || 0);
 
-                // 2. Prepara os dados atualizados do PEDIDO
-                const updatedOrderData = { ...order };
-                const adiantamentoExistente = updatedOrderData.downPayment || 0;
-                updatedOrderData.downPayment = totalValue; // Marca o pedido como 100% pago
-                updatedOrderData.orderStatus = 'Entregue';
+            // 2. Calcula o valor RESTANTE a ser pago
+            const adiantamentoExistente = order.downPayment || 0;
+            const valorRestante = totalValue - adiantamentoExistente;
 
-                // 3. Calcula o valor RESTANTE a ser pago
-                const valorRestante = totalValue - adiantamentoExistente;
+            // 3. Prepara os dados base do PEDIDO para atualização
+            // (Estes dados são usados para o recibo e para salvar o pedido)
+            const updatedOrderData = { ...order };
+            updatedOrderData.downPayment = totalValue; // Marca o pedido como 100% pago (para o recibo)
+            updatedOrderData.orderStatus = 'Entregue';
+
+            // 4. Inicia o fluxo de quitação
+            
+            // Cenário A: Não há nada a pagar (valorRestante <= 0)
+            if (valorRestante <= 0) {
+                const confirmed = await UI.showConfirmModal(
+                    "Este pedido já está pago. Deseja apenas marcá-lo como 'Entregue'?",
+                    "Sim, marcar como 'Entregue'",
+                    "Cancelar"
+                );
                 
-                // 4. Salva o PEDIDO
-                saveOrder(updatedOrderData, id)
-                    .then(async () => { 
-                        
-                        // 5. ATUALIZA O FINANCEIRO (A NOVA LÓGICA)
-                        
-                        // Se o valor restante for > 0, cria um NOVO lançamento de "Quitação"
-                        if (valorRestante > 0) {
-                            const today = new Date().toISOString().split('T')[0];
-                            const transactionData = {
-                                date: today,
-                                description: `Quitação Pedido - ${updatedOrderData.clientName}`,
-                                amount: valorRestante,
-                                type: 'income',
-                                category: 'Quitação de Pedido', // Nova categoria
-                                source: updatedOrderData.paymentFinSource || 'banco', // Usa a origem do adiantamento, ou banco
-                                status: 'pago',
-                                orderId: id // Vincula ao pedido
-                            };
-                            // Cria a transação de quitação (não edita a de adiantamento)
-                            await saveTransaction(transactionData, null);
-                        }
-                        
-                        // 6. Pergunta sobre o recibo (Lógica antiga)
-                        const generate = await UI.showConfirmModal(
-                            "Pedido quitado e movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
-                            "Sim, gerar recibo",
-                            "Não, obrigado"
-                        );
-                        if (generate) {
-                            await generateReceiptPdf(updatedOrderData, userCompanyName, UI.showInfoModal);
-                        }
-                    })
-                    .catch(error => {
-                        console.error("Erro ao quitar e entregar pedido:", error);
-                        UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
-                    });
-                // ========================================================
-                // FIM DA CORREÇÃO v5.0.1
-                // ========================================================
+                if (confirmed) {
+                    // Apenas salva o pedido, sem transação financeira
+                    await saveOrder(updatedOrderData, id);
+                    
+                    // Pergunta sobre o recibo
+                    const generate = await UI.showConfirmModal(
+                        "Pedido movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
+                        "Sim, gerar recibo",
+                        "Não, obrigado"
+                    );
+                    if (generate) {
+                        await generateReceiptPdf(updatedOrderData, userCompanyName, UI.showInfoModal);
+                    }
+                }
+            } 
+            // Cenário B: Há valor a pagar (valorRestante > 0)
+            else {
+                // Chama o novo mini-modal para coletar Data e Origem
+                const settlementData = await UI.showSettlementModal(id, valorRestante);
+
+                // Se o usuário confirmou (não clicou em "Cancelar")
+                if (settlementData) { 
+                    // `settlementData` contém { date, source }
+
+                    // 1. Salva o PEDIDO (marcando como 'Entregue')
+                    await saveOrder(updatedOrderData, id);
+
+                    // 2. Cria a NOVA transação de Quitação com os dados corretos
+                    const transactionData = {
+                        date: settlementData.date, // <-- DADO CORRETO (do modal)
+                        description: `Quitação Pedido - ${updatedOrderData.clientName}`,
+                        amount: valorRestante,
+                        type: 'income',
+                        category: 'Quitação de Pedido', // Nova categoria
+                        source: settlementData.source, // <-- DADO CORRETO (do modal)
+                        status: 'pago',
+                        orderId: id // Vincula ao pedido
+                    };
+                    
+                    // 2. Salva a transação
+                    await saveTransaction(transactionData, null);
+                    
+                    // 3. Pergunta sobre o recibo (como antes)
+                    const generate = await UI.showConfirmModal(
+                        "Pedido quitado e movido para 'Entregues' com sucesso! Deseja gerar o Recibo de Quitação e Entrega?",
+                        "Sim, gerar recibo",
+                        "Não, obrigado"
+                    );
+                    if (generate) {
+                        await generateReceiptPdf(updatedOrderData, userCompanyName, UI.showInfoModal);
+                    }
+                }
+                // Se 'settlementData' for null (usuário cancelou o mini-modal), não faz nada.
             }
-        });
+
+        } catch (error) {
+            console.error("Erro ao quitar e entregar pedido:", error);
+            UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
+        }
+        // ========================================================
+        // FIM DA CORREÇÃO v4.2.7
+        // ========================================================
     }
 });
 
@@ -909,7 +935,8 @@ UI.DOM.saveBalanceBtn.addEventListener('click', async () => {
 });
 
 // --- Listeners de Modais Genéricos e Opções ---
-[UI.DOM.infoModalCloseBtn, UI.DOM.cancelTransactionBtn, UI.DOM.cancelBalanceBtn, UI.DOM.closeOptionsModalBtn].forEach(button => {
+// v4.2.7: Adiciona o botão de cancelar do novo modal
+[UI.DOM.infoModalCloseBtn, UI.DOM.cancelTransactionBtn, UI.DOM.cancelBalanceBtn, UI.DOM.closeOptionsModalBtn, UI.DOM.settlementCancelBtn].forEach(button => {
     if (button) button.addEventListener('click', () => button.closest('.fixed').classList.add('hidden'));
 });
 
@@ -1010,6 +1037,11 @@ document.addEventListener('keydown', (event) => {
             UI.DOM.confirmOkBtn.click();
             event.preventDefault(); // Previne o comportamento padrão do Enter
         } 
+        // v4.2.7: Confirma Quitação
+        else if (!UI.DOM.settlementModal.classList.contains('hidden')) {
+            UI.DOM.settlementConfirmBtn.click();
+            event.preventDefault();
+        }
         // Salva Saldo Inicial
         else if (!UI.DOM.initialBalanceModal.classList.contains('hidden')) {
             UI.DOM.saveBalanceBtn.click();
@@ -1032,6 +1064,10 @@ document.addEventListener('keydown', (event) => {
         if (!UI.DOM.confirmModal.classList.contains('hidden')) {
             UI.DOM.confirmCancelBtn.click();
         } 
+        // v4.2.7: Cancela Quitação
+        else if (!UI.DOM.settlementModal.classList.contains('hidden')) {
+            UI.DOM.settlementCancelBtn.click();
+        }
         else if (!UI.DOM.initialBalanceModal.classList.contains('hidden')) {
             UI.DOM.cancelBalanceBtn.click();
         } 
