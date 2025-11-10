@@ -8,7 +8,7 @@ import { doc, getDoc, writeBatch, collection } from "https://www.gstatic.com/fir
 import { db, auth } from './firebaseConfig.js';
 
 // Módulo de Autenticação
-import { handleLogin, handleLogout, handleForgotPassword } from './auth.js';
+import { handleLogout } from './auth.js';
 
 // Módulos de Serviços de Negócio
 import { initializeOrderService, saveOrder, deleteOrder, getOrderById, getAllOrders, cleanupOrderService } from './services/orderService.js';
@@ -27,13 +27,14 @@ import {
 import { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } from './services/pricingService.js';
 
 // Módulo de Utilitários
-import { initializeIdleTimer, resetIdleTimer, fileToBase64, uploadToImgBB, generateComprehensivePdf, generateReceiptPdf } from './utils.js';
+import { initializeIdleTimer, fileToBase64, uploadToImgBB, generateComprehensivePdf, generateReceiptPdf } from './utils.js';
 
 // Módulo de Interface do Usuário (UI) - Importando tudo sob o namespace 'UI'
 import * as UI from './ui.js';
 
 // Módulos de Listeners (Refatoração v4.3.6+)
 import { initializeAuthListeners } from './listeners/authListeners.js';
+import { initializeNavigationListeners } from './listeners/navigationListeners.js';
 
 
 // ========================================================
@@ -446,55 +447,27 @@ const collectFormData = () => {
 // PARTE 6: EVENT LISTENERS (A "COLA" DA APLICAÇÃO)
 // ========================================================
 
-// --- Inicialização e Eventos Globais ---
-window.addEventListener('load', () => UI.handleCookieConsent());
-['mousemove', 'keydown', 'click', 'scroll'].forEach(event => window.addEventListener(event, resetIdleTimer));
-
 // --- Inicialização dos Módulos de Listeners ---
-initializeAuthListeners(); // <-- NOVO: Inicializa os listeners de autenticação
+initializeAuthListeners();
 
-// --- Navegação Principal ---
-// (Listeners de login, logout e forgotPassword movidos para authListeners.js)
-
-UI.DOM.financeDashboardBtn.addEventListener('click', () => {
-    currentDashboardView = currentDashboardView === 'orders' ? 'finance' : 'orders';
-    UI.DOM.ordersDashboard.classList.toggle('hidden', currentDashboardView !== 'orders');
-    UI.DOM.financeDashboard.classList.toggle('hidden', currentDashboardView === 'orders');
-    UI.updateNavButton(currentDashboardView);
-    if (currentDashboardView === 'finance') {
-        // Renderiza o dashboard financeiro (KPIs e lista) ao trocar para esta view
-        UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig);
-    } else {
-        // Renderiza os pedidos ao trocar para esta view
-        UI.renderOrders(getAllOrders(), currentOrdersView);
+// v4.3.7: Injeção de Dependência para os handlers e getters/setters de estado
+initializeNavigationListeners({
+    handleBackup,
+    handleRestore,
+    getOrders: getAllOrders,
+    getTransactions: getAllTransactions,
+    getConfig: () => userBankBalanceConfig,
+    getState: () => ({ currentDashboardView, currentOrdersView }),
+    setState: (newState) => {
+        if (newState.currentDashboardView !== undefined) {
+            currentDashboardView = newState.currentDashboardView;
+        }
+        if (newState.currentOrdersView !== undefined) {
+            currentOrdersView = newState.currentOrdersView;
+        }
     }
 });
 
-UI.DOM.userMenuBtn.addEventListener('click', () => UI.DOM.userDropdown.classList.toggle('hidden'));
-document.addEventListener('click', (e) => { 
-    if (UI.DOM.userMenuBtn && !UI.DOM.userMenuBtn.parentElement.contains(e.target)) {
-        UI.DOM.userDropdown.classList.add('hidden');
-    }
-});
-
-// --- Menu Dropdown do Usuário ---
-UI.DOM.toggleViewBtn.addEventListener('click', () => {
-    currentOrdersView = currentOrdersView === 'pending' ? 'delivered' : 'pending';
-    UI.DOM.toggleViewBtn.textContent = currentOrdersView === 'pending' ? 'Ver Entregues' : 'Ver Pendentes';
-    // Faz uma renderização completa com base no cache local ao trocar de view
-    UI.renderOrders(getAllOrders(), currentOrdersView);
-});
-UI.DOM.backupBtn.addEventListener('click', handleBackup);
-UI.DOM.restoreFileInput.addEventListener('change', handleRestore);
-UI.DOM.requestDeletionBtn.addEventListener('click', async () => { 
-    const confirmed = await UI.showConfirmModal("Isto registrará uma solicitação. Envie um e-mail ao administrador para formalizar. Continuar?", "Sim", "Cancelar");
-    if (confirmed) {
-        UI.showInfoModal(`Para concluir, envie um e-mail para paglucrobr@gmail.com solicitando a remoção da sua conta.`);
-    }
-});
-UI.DOM.cookieAcceptBtn.addEventListener('click', () => { localStorage.setItem('cookieConsent', 'true'); UI.DOM.cookieBanner.classList.add('hidden'); });
-UI.DOM.backupNowBtn.addEventListener('click', () => { handleBackup(); UI.DOM.backupReminderBanner.classList.add('hidden'); });
-UI.DOM.dismissBackupReminderBtn.addEventListener('click', () => UI.DOM.backupReminderBanner.classList.add('hidden'));
 
 // --- Funcionalidades de Pedidos ---
 UI.DOM.addOrderBtn.addEventListener('click', () => { 
