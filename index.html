@@ -343,6 +343,44 @@
             </div>
         </div>
     </div>
+
+    <div id="settlementModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full">
+            <h3 class="text-xl font-bold mb-6 text-center">Confirmar Quitação</h3>
+            <input type="hidden" id="settlementOrderId">
+            
+            <div class="space-y-4">
+                <div>
+                    <span class="text-sm font-semibold text-gray-600">Valor Restante a Pagar</span>
+                    <p id="settlementAmountDisplay" class="text-2xl font-bold text-blue-600">R$ 0,00</p>
+                </div>
+
+                <div>
+                    <label for="settlementDate" class="text-sm font-semibold">Data da Quitação</label>
+                    <input type="date" id="settlementDate" class="p-2 border rounded-md w-full" required>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-semibold">Origem (Onde o dinheiro entrou)</label>
+                    <div id="settlementSourceContainer" class="flex gap-2 mt-1">
+                        <button type="button" class="source-selector flex-1 flex items-center justify-center gap-2" data-source="banco">
+                            <span class="icon-placeholder w-4 h-4"></span>
+                            <span>Banco</span>
+                        </button>
+                        <button type="button" class="source-selector flex-1 flex items-center justify-center gap-2" data-source="caixa">
+                            <span class="icon-placeholder w-4 h-4"></span>
+                            <span>Caixa</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-4 mt-8">
+                <button type="button" id="settlementCancelBtn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300">Cancelar</button>
+                <button type="button" id="settlementConfirmBtn" class="bg-green-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-green-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
     <div id="initialBalanceModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-[70] hidden modal-enter">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full">
             <h3 class="text-xl font-bold mb-4">Ajustar Saldo Inicial</h3>
