@@ -1,124 +1,15 @@
 // ==========================================================
-// MÓDULO UI "GERENTE" (v4.3.0)
+// MÓDULO UI "GERENTE" (v4.3.1)
 // Responsabilidade: Importar e reexportar funções de 
-// especialistas. Por enquanto, importa o DOM e define
-// as funções (que serão movidas em breve).
+// especialistas.
 // ==========================================================
 
-// v4.3.0: Importa o DOM e constantes do novo especialista
+// v4.3.0: Importa o DOM e constantes do especialista
 import { DOM, SIZES_ORDER, CHECK_ICON_SVG } from './ui/dom.js';
 
-// Funções de Modais
-export const showInfoModal = (message) => {
-    DOM.infoModalMessage.textContent = message;
-    DOM.infoModal.classList.remove('hidden');
-};
+// v4.3.1: Importa os Modais do especialista
+import * as Modals from './ui/modalHandler.js';
 
-export const showForgotPasswordModal = () => {
-    return new Promise((resolve) => {
-        DOM.resetEmailInput.value = '';
-        DOM.forgotPasswordModal.classList.remove('hidden');
-        DOM.resetEmailInput.focus();
-
-        const handleSend = () => {
-            cleanupAndResolve(DOM.resetEmailInput.value.trim());
-        };
-
-        const handleCancel = () => {
-            cleanupAndResolve(null);
-        };
-
-        const cleanupAndResolve = (value) => {
-            DOM.sendResetEmailBtn.removeEventListener('click', handleSend);
-            DOM.cancelResetBtn.removeEventListener('click', handleCancel);
-            DOM.forgotPasswordModal.classList.add('hidden');
-            resolve(value);
-        };
-
-        DOM.sendResetEmailBtn.addEventListener('click', handleSend, { once: true });
-        DOM.cancelResetBtn.addEventListener('click', handleCancel, { once: true });
-    });
-};
-
-export const showConfirmModal = (message, okText = "OK", cancelText = "Cancelar") => {
-    return new Promise((resolve) => {
-        DOM.confirmModalMessage.textContent = message;
-        DOM.confirmOkBtn.textContent = okText;
-        DOM.confirmCancelBtn.textContent = cancelText;
-        DOM.confirmModal.classList.remove('hidden');
-
-        const confirmListener = () => resolvePromise(true);
-        const cancelListener = () => resolvePromise(false);
-
-        const resolvePromise = (value) => {
-            DOM.confirmModal.classList.add('hidden');
-            DOM.confirmOkBtn.removeEventListener('click', confirmListener);
-            DOM.confirmCancelBtn.removeEventListener('click', cancelListener);
-            resolve(value);
-        };
-
-        DOM.confirmOkBtn.addEventListener('click', confirmListener, { once: true });
-        DOM.confirmCancelBtn.addEventListener('click', cancelListener, { once: true });
-    });
-};
-
-// v4.2.7: Novo Modal de Quitação
-export const showSettlementModal = (orderId, amount) => {
-    return new Promise((resolve) => {
-        DOM.settlementOrderId.value = orderId;
-        DOM.settlementAmountDisplay.textContent = `R$ ${amount.toFixed(2)}`;
-        DOM.settlementDate.value = new Date().toISOString().split('T')[0];
-        
-        // Define 'banco' como padrão ao abrir
-        updateSourceSelectionUI(DOM.settlementSourceContainer, 'banco');
-
-        DOM.settlementModal.classList.remove('hidden');
-        DOM.settlementDate.focus(); // Foco na data
-
-        const handleConfirm = () => {
-            const selectedSourceEl = DOM.settlementSourceContainer.querySelector('.source-selector.active');
-            if (!selectedSourceEl) {
-                // Feedback sutil se nenhuma origem for selecionada
-                const container = DOM.settlementSourceContainer;
-                container.classList.add('ring-2', 'ring-red-500', 'rounded-md');
-                setTimeout(() => container.classList.remove('ring-2', 'ring-red-500', 'rounded-md'), 1000);
-                return;
-            }
-            
-            const data = {
-                date: DOM.settlementDate.value,
-                source: selectedSourceEl.dataset.source
-            };
-            cleanupAndResolve(data);
-        };
-
-        const handleCancel = () => {
-            cleanupAndResolve(null);
-        };
-        
-        // v4.2.7: Listener de clique interno para os seletores de origem do modal
-        const handleSourceClick = (e) => {
-             const target = e.target.closest('.source-selector');
-             if (target) {
-                updateSourceSelectionUI(DOM.settlementSourceContainer, target.dataset.source);
-             }
-        };
-
-        const cleanupAndResolve = (value) => {
-            DOM.settlementModal.classList.add('hidden');
-            DOM.settlementConfirmBtn.removeEventListener('click', handleConfirm);
-            DOM.settlementCancelBtn.removeEventListener('click', handleCancel);
-            DOM.settlementSourceContainer.removeEventListener('click', handleSourceClick); // Limpa o listener de origem
-            resolve(value);
-        };
-
-        // Adiciona listeners
-        DOM.settlementConfirmBtn.addEventListener('click', handleConfirm, { once: false }); // 'once: false' por causa da validação
-        DOM.settlementCancelBtn.addEventListener('click', handleCancel, { once: true });
-        DOM.settlementSourceContainer.addEventListener('click', handleSourceClick);
-    });
-};
-// Fim v4.2.7
 
 // Funções de UI Geral
 export const updateNavButton = (currentDashboardView) => {
@@ -1329,3 +1220,8 @@ export const formatPhoneNumber = (value) => {
     value = value.replace(/(\d)(\d{4})$/,'$1-$2');    // Coloca hífen entre o quarto e o quinto dígitos
     return value;
 }
+
+// v4.3.1: Reexporta os especialistas
+export {
+    ...Modals
+};
