@@ -1,24 +1,29 @@
 // js/listeners/modalAndPricingListeners.js
 
-import * as UI from '../ui.js';
+// v5.7.22: REMOVIDA importação estática de UI.
+// import * as UI from '../ui.js';
 
 /**
  * Inicializa os listeners para modais genéricos, tabela de preços e atalhos de teclado.
+ * v5.7.22: A função agora recebe o módulo 'UI' injetado pelo main.js.
+ * @param {object} UI - O módulo UI (injetado)
  * @param {object} deps - Dependências injetadas
  * @param {object} deps.services - Funções de serviço (getAllPricingItems, etc.)
  * @param {object} deps.helpers - Funções auxiliares (getOptionsFromStorage, etc.)
  * @param {Function} deps.getState - Getter para o estado (currentOptionType)
  */
-export function initializeModalAndPricingListeners(deps) {
+export function initializeModalAndPricingListeners(UI, deps) {
     
     const { services, helpers, getState } = deps;
 
     // --- Listeners de Modais Genéricos e Opções ---
 
     // Botões de fechar/cancelar em modais diversos
+    // v5.7.6: Removido 'cancelTransactionBtn' deste loop, pois agora é 
+    // tratado especificamente em financeListeners.js
     [
         UI.DOM.infoModalCloseBtn, 
-        UI.DOM.cancelTransactionBtn, 
+        // UI.DOM.cancelTransactionBtn, // REMOVIDO
         UI.DOM.cancelBalanceBtn, 
         UI.DOM.closeOptionsModalBtn, 
         UI.DOM.settlementCancelBtn
@@ -57,9 +62,14 @@ export function initializeModalAndPricingListeners(deps) {
     // --- Tabela de Preços ---
     UI.DOM.priceTableBtn.addEventListener('click', () => { 
         UI.renderPriceTable(services.getAllPricingItems(), 'view'); 
-        UI.DOM.priceTableModal.classList.remove('hidden'); 
+        
+        // v5.7.6: Centralizado via modalHandler para aplicar o remendo de z-index
+        UI.showPriceTableModal(); 
     });
-    UI.DOM.closePriceTableBtn.addEventListener('click', () => UI.DOM.priceTableModal.classList.add('hidden'));
+    
+    // v5.7.6: Centralizado via modalHandler
+    UI.DOM.closePriceTableBtn.addEventListener('click', () => UI.hidePriceTableModal());
+    
     UI.DOM.editPriceTableBtn.addEventListener('click', () => UI.renderPriceTable(services.getAllPricingItems(), 'edit'));
     UI.DOM.cancelPriceTableBtn.addEventListener('click', () => UI.renderPriceTable(services.getAllPricingItems(), 'view'));
 
@@ -107,6 +117,9 @@ export function initializeModalAndPricingListeners(deps) {
     });
 
     // --- Listener Global de Teclado para Atalhos ---
+    // v5.7.6: Esta seção está CORRETA. Ela clica nos botões, 
+    // e os botões agora disparam os listeners corretos que 
+    // usam o modalHandler. Nenhuma alteração necessária aqui.
     document.addEventListener('keydown', (event) => {
         // Atalho para confirmação (Enter)
         if (event.key === 'Enter') {
