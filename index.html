@@ -10,8 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="style.css">
-</head>
+    </head>
 <body class="antiasaed text-gray-800 bg-slate-50">
 
     <div id="authContainer" class="flex items-center justify-center min-h-screen">
@@ -473,7 +472,7 @@
     <div id="cookieBanner" class="hidden fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 shadow-lg z-50 flex flex-col sm:flex-row items-center justify-center gap-4 text-center sm:text-left">
         <p class="text-sm">
             Utilizamos tecnologias essenciais para o funcionamento da plataforma. Ao continuar, você concorda com o uso delas. Para mais detalhes, acesse nossa 
-            <a href="https://paglucrobr.com/gerenciador-privacidade" target="_blank" rel="noopener noreferrer" class="font-semibold underline hover:text-gray-300">Política de Privacidade</a>.
+            <a href="https://paglucrobr.com/gestor-privacidade" target="_blank" rel="noopener noreferrer" class="font-semibold underline hover:text-gray-300">Política de Privacidade</a>.
         </p>
         <button id="cookieAcceptBtn" class="bg-blue-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-blue-700 whitespace-nowrap">Entendi</button>
     </div>
@@ -569,7 +568,7 @@
     <datalist id="part-type-list"></datalist>
     <datalist id="part-material-list"></datalist>
 
-    <div id="backupReminderBanner" class="hidden fixed bottom-5 right-5 w-full max-w-sm bg-white rounded-lg shadow-lg p-4 border toast-enter z-50">
+    <div id="backupReminderBanner" class="hidden fixed bottom-5 right-5 w-full max-w-sm bg-white rounded-lg shadow-lg p-4 border">
         <div class="flex items-start gap-3">
             <div class="flex-shrink-0 text-blue-500">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -587,6 +586,35 @@
         </div>
     </div>
     
-    <script type="module" src="js/main.js"></script>
-</body>
+    <script type="text/javascript">
+        (function() {
+            // Cria um timestamp único para forçar o cache-busting em proxies
+            const cacheBuster = `v=${new Date().getTime()}`;
+            
+            // 1. Cria o elemento <script> para o JS Principal
+            //    (Não injeta ainda)
+            const mainScript = document.createElement('script');
+            mainScript.type = 'module';
+            mainScript.src = `js/main.js?${cacheBuster}`;
+
+            // 2. Cria o elemento <link> para o CSS
+            const cssLink = document.createElement('link');
+            cssLink.rel = 'stylesheet';
+            cssLink.href = `style.css?${cacheBuster}`;
+            
+            // 3. Define a "Cadeia de Carregamento"
+            //    Somente quando o CSS terminar de carregar (onload),
+            //    nós injetamos o JS.
+            cssLink.onload = function() {
+                // O CSS foi baixado e parseado.
+                // Agora é seguro carregar o JS.
+                document.body.appendChild(mainScript);
+            };
+            
+            // 4. Inicia a cadeia injetando o CSS no <head>
+            document.head.appendChild(cssLink);
+        })();
+    </script>
+    espero que funcione
+    </body>
 </html>
