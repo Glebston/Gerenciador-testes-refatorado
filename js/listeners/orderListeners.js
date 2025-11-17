@@ -1,14 +1,17 @@
 // js/listeners/orderListeners.js
 
-import * as UI from '../ui.js';
+// v5.7.22: REMOVIDA importação estática de UI.
+// import * as UI from '../ui.js'; 
 import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf } from '../utils.js';
 
 /**
  * Coleta os dados do formulário do pedido.
  * Esta é uma função auxiliar local para o módulo de listeners de pedido.
  * (Anteriormente em main.js)
+ * v5.7.22: 'UI' agora é injetado nesta função auxiliar.
+ * @param {object} UI - O módulo UI (injetado)
  */
-function collectFormData() {
+function collectFormData(UI) {
     // Coleta a origem (Banco/Caixa) do adiantamento
     const activeSourceEl = UI.DOM.downPaymentSourceContainer.querySelector('.source-selector.active');
     
@@ -49,6 +52,8 @@ function collectFormData() {
 
 /**
  * Inicializa todos os event listeners relacionados a Pedidos.
+ * v5.7.22: A função agora recebe o módulo 'UI' injetado pelo main.js.
+ * @param {object} UI - O módulo UI (injetado)
  * @param {object} deps - Dependências injetadas
  * @param {Function} deps.getState - Getter para o estado (partCounter, etc.)
  * @param {Function} deps.setState - Setter para o estado
@@ -56,7 +61,7 @@ function collectFormData() {
  * @param {object} deps.services - Funções de serviço (saveOrder, getOrderById, etc.)
  * @param {string} deps.userCompanyName - Nome da empresa do usuário
  */
-export function initializeOrderListeners(deps) {
+export function initializeOrderListeners(UI, deps) {
 
     const { getState, setState, getOptionsFromStorage, services, userCompanyName } = deps;
 
@@ -64,7 +69,9 @@ export function initializeOrderListeners(deps) {
     UI.DOM.addOrderBtn.addEventListener('click', () => { 
         setState({ partCounter: 0 }); 
         UI.resetForm(); 
-        UI.DOM.orderModal.classList.remove('hidden'); 
+        
+        // v5.7.6: Centralizado via modalHandler para aplicar o remendo de z-index
+        UI.showOrderModal(); 
     });
 
     // ========================================================
@@ -82,7 +89,7 @@ export function initializeOrderListeners(deps) {
             const newUrls = (await Promise.all(uploadPromises)).filter(Boolean);
             
             // --- ETAPA 2: Coletar Dados e Salvar Pedido ---
-            const orderData = collectFormData(); // Usa a função auxiliar local
+            const orderData = collectFormData(UI); // v5.7.22: Injeta UI na função auxiliar
             orderData.mockupUrls.push(...newUrls);
             
             const orderId = UI.DOM.orderId.value;
@@ -127,7 +134,8 @@ export function initializeOrderListeners(deps) {
             }
 
             // --- ETAPA 4: Feedback ---
-            UI.DOM.orderModal.classList.add('hidden');
+            // v5.7.6: Centralizado via modalHandler
+            UI.hideOrderModal();
             
             if (orderData.orderStatus === 'Finalizado' || orderData.orderStatus === 'Entregue') {
                 const generate = await UI.showConfirmModal(
@@ -168,6 +176,10 @@ export function initializeOrderListeners(deps) {
             partCounter = 0;
             partCounter = UI.populateFormForEdit(order, partCounter);
             setState({ partCounter });
+            
+            // v5.7.6: Centralizado via modalHandler para aplicar o remendo de z-index
+            UI.showOrderModal();
+            
         } else if (btn.classList.contains('replicate-btn')) {
             let { partCounter } = getState();
             partCounter = 0;
@@ -189,6 +201,9 @@ export function initializeOrderListeners(deps) {
             UI.DOM.downPaymentStatusPago.checked = true;
             UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, 'banco');
             
+            // v5.7.6: Centralizado via modalHandler para aplicar o remendo de z-index
+            UI.showOrderModal();
+            
         } else if (btn.classList.contains('delete-btn')) {
             UI.showConfirmModal("Tem certeza que deseja excluir este pedido?", "Excluir", "Cancelar")
               .then(async (confirmed) => {
@@ -204,6 +219,10 @@ export function initializeOrderListeners(deps) {
               });
         } else if (btn.classList.contains('view-btn')) {
             UI.viewOrder(order);
+            
+            // v5.7.6: Centralizado via modalHandler para aplicar o remendo de z-index
+            UI.showViewModal();
+            
         } else if (btn.classList.contains('settle-and-deliver-btn')) {
             // ========================================================
             // INÍCIO DA LÓGICA DE QUITAÇÃO v4.2.7
@@ -291,7 +310,8 @@ export function initializeOrderListeners(deps) {
         if (!btn) return;
 
         if (btn.id === 'closeViewBtn') { 
-            UI.DOM.viewModal.classList.add('hidden'); 
+            // v5.7.6: Centralizado via modalHandler
+            UI.hideViewModal();
             UI.DOM.viewModal.innerHTML = ''; 
         }
         if (btn.id === 'comprehensivePdfBtn') {
@@ -300,7 +320,8 @@ export function initializeOrderListeners(deps) {
     });
 
     // --- Interações dentro do Modal de Pedidos ---
-    UI.DOM.cancelBtn.addEventListener('click', () => UI.DOM.orderModal.classList.add('hidden'));
+    // v5.7.6: Centralizado via modalHandler
+    UI.DOM.cancelBtn.addEventListener('click', () => UI.hideOrderModal());
     
     UI.DOM.addPartBtn.addEventListener('click', () => { 
         let { partCounter } = getState();
