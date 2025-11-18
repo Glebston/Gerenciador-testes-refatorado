@@ -20,28 +20,3 @@ input[type="file"]::file-selector-button { @apply bg-gray-200 text-gray-800 font
 .status-Entregue { @apply bg-gray-200 text-gray-800; }
 .kanban-board { display: flex; overflow-x: auto; padding-bottom: 1rem; gap: 1.5rem; }
 .kanban-column { flex: 0 0 340px; max-width: 340px; }
-
-/* === INÍCIO DAS CORREÇÕES (v5.7.1) === */
-
-/* Z-Index Fix: Garante que os modais principais fiquem acima do banner de backup */
-#orderModal, #viewModal, #transactionModal, #priceTableModal {
-    z-index: 55;
-}
-
-/* === FIM DAS CORREÇÕES === */
-
-
-/* === INÍCIO DA CORREÇÃO v5.7.31 (Tentativa #12) === */
-/*
-  Diagnóstico: O bug é uma "race condition" com o JIT do Tailwind CDN
-  tentando gerar a classe 'z-50'.
-  
-  Solução: Remover a classe 'z-50' do HTML e aplicar o z-index
-  estaticamente aqui, no nosso CSS, que não está em "race condition".
-  Isso bypassa o JIT do Tailwind para este elemento.
-*/
-#backupReminderBanner {
-    z-index: 50;
-}
-
-/* === FIM DA CORREÇÃO v5.7.31 === */
