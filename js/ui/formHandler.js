@@ -1,5 +1,5 @@
 // ==========================================================
-// MÓDULO FORM HANDLER (v4.5.1 - Patch Visual & Circular)
+// MÓDULO FORM HANDLER (v4.5.2 - Patch Final Blindagem)
 // Responsabilidade: Gerenciar toda a lógica interna do
 // modal de Pedidos.
 // ==========================================================
@@ -109,8 +109,6 @@ const addContentToPart = (partItem, partData = {}) => {
         const sizesGrid = comumTpl.querySelector('.sizes-grid');
         
         // CORREÇÃO VISUAL v4.5.1: 
-        // Removemos a grid do container pai para que as categorias empilhem (block/stack)
-        // em vez de ficarem espremidas lado a lado.
         sizesGrid.className = 'sizes-grid hidden mt-3 space-y-4';
 
         const categories = {
@@ -120,7 +118,6 @@ const addContentToPart = (partItem, partData = {}) => {
         };
         let gridHtml = '';
         for (const category in categories) {
-            // Aqui dentro, mantemos a grid para os inputs (3 colunas mobile, 6 desktop)
             gridHtml += `
             <div class="p-3 border rounded-md bg-white shadow-sm">
                 <h4 class="font-bold text-gray-600 mb-3 text-sm uppercase tracking-wide border-b pb-1">${category}</h4>
@@ -193,7 +190,6 @@ const addContentToPart = (partItem, partData = {}) => {
             'Infantil': ['2 anos', '4 anos', '6 anos', '8 anos', '10 anos', '12 anos']
         };
         
-        // Correção Visual também para o Modo Detalhado
         let gridHtml = '<div class="space-y-4">';
         for (const category in categories) {
             gridHtml += `
@@ -292,7 +288,6 @@ export const resetForm = () => {
     
     DOM.downPaymentDate.value = new Date().toISOString().split('T')[0];
     DOM.downPaymentStatusPago.checked = true;
-    // A função agora é importada corretamente do helpers.js
     updateSourceSelectionUI(DOM.downPaymentSourceContainer, 'banco');
     
     updateFinancials();
@@ -311,7 +306,11 @@ export const populateFormForEdit = (orderData, currentPartCounter) => {
     DOM.generalObservation.value = orderData.generalObservation;
     DOM.downPayment.value = orderData.downPayment || '';
     DOM.discount.value = orderData.discount || '';
-    DOM.paymentMethod.value = orderData.paymentMethod || '';
+    
+    // CORREÇÃO v4.5.2: Blindagem do campo paymentMethod, que pode ser NULL no DOM.
+    if (DOM.paymentMethod) {
+        DOM.paymentMethod.value = orderData.paymentMethod || '';
+    }
     
     DOM.downPaymentDate.value = orderData.downPaymentDate || new Date().toISOString().split('T')[0];
     const finStatus = orderData.paymentFinStatus || 'pago';
