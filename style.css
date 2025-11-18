@@ -20,3 +20,28 @@ input[type="file"]::file-selector-button { @apply bg-gray-200 text-gray-800 font
 .status-Entregue { @apply bg-gray-200 text-gray-800; }
 .kanban-board { display: flex; overflow-x: auto; padding-bottom: 1rem; gap: 1.5rem; }
 .kanban-column { flex: 0 0 340px; max-width: 340px; }
+
+/* === INÍCIO DAS CORREÇÕES (v5.7.1) === */
+
+/* Z-Index Fix: Garante que os modais principais fiquem acima do banner de backup */
+#orderModal, #viewModal, #transactionModal, #priceTableModal {
+    z-index: 55;
+}
+
+/* === FIM DAS CORREÇÕES === */
+
+
+/* === INÍCIO DA CORREÇÃO v5.7.38 (Parte 2: Reversão) === */
+/*
+  O bloco de código v5.7.35 foi REMOVIDO daqui.
+  O diagnóstico do "lugar errado" (JIT) estava incorreto.
+  As classes do Tailwind no index.html (fixed, bottom-5, etc.) 
+  estão funcionando como esperado.
+*/
+
+/* v5.7.31 (Mantido): Esta regra ainda é necessária */
+#backupReminderBanner {
+    z-index: 50; 
+}
+
+/* === FIM DA CORREÇÃO v5.7.38 === */
