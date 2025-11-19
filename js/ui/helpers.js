@@ -1,11 +1,15 @@
 // ==========================================================
-// MÓDULO UI HELPERS (v4.3.0 - Patch v5.8.1)
+// MÓDULO UI HELPERS (v4.5.2 - Hotfix Desacoplado)
 // Responsabilidade: Fornecer funções "ajudantes"
 // genéricas usadas por outros módulos da UI.
 // (Ex: formatar telefone, atualizar botões, etc.)
 // ==========================================================
 
-import { DOM, CHECK_ICON_SVG } from './dom.js';
+// CORREÇÃO: Removida importação de CHECK_ICON_SVG para evitar erro de loading
+import { DOM } from './dom.js';
+
+// Definido localmente para quebrar dependência circular/cache
+const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
 
 // Funções de UI Geral
 export const updateNavButton = (currentDashboardView) => {
