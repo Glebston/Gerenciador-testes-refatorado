@@ -18,7 +18,8 @@ export const formatDate = (dateString) => {
     return `${day}/${month}/${year}`;
 };
 
-export const formatPhone = (v) => {
+// RENOMEADO DE formatPhone PARA formatPhoneNumber PARA EVITAR ERROS NOS LISTENERS
+export const formatPhoneNumber = (v) => {
     if (!v) return '';
     v = v.replace(/\D/g, "");
     v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
@@ -71,6 +72,32 @@ export const populateDropdown = (selectElement, options) => {
         option.textContent = label;
         selectElement.appendChild(option);
     });
+};
+
+/**
+ * CORREÇÃO: Função restaurada para popular os datalists (sugestões de input)
+ */
+export const populateDatalists = (partTypes, materialTypes) => {
+    const typeList = document.getElementById('part-type-list');
+    const materialList = document.getElementById('part-material-list');
+
+    if (typeList) {
+        typeList.innerHTML = '';
+        (partTypes || []).forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            typeList.appendChild(option);
+        });
+    }
+
+    if (materialList) {
+        materialList.innerHTML = '';
+        (materialTypes || []).forEach(material => {
+            const option = document.createElement('option');
+            option.value = material;
+            materialList.appendChild(option);
+        });
+    }
 };
 
 // =============================================================================
