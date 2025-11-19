@@ -124,22 +124,16 @@ const createOrderCard = (order) => {
 // =============================================================================
 
 export const renderOrders = (orders, viewType = 'pending') => {
-    // BLINDAGEM DE ERRO (CORREÇÃO v5.7.57)
-    // Verifica se os elementos do DOM existem antes de tentar manipulá-los.
-    // Isso previne o erro "Cannot read properties of undefined (reading 'style')".
-    
     if (!DOM.ordersList) {
-        console.error("Elemento 'ordersList' não encontrado no DOM map.");
+        // console.warn("Elemento 'ordersList' não encontrado no DOM map.");
         return;
     }
     
-    // NOTA: Removido DOM.loadingIndicator.style.display = 'none' pois ele não existe mais.
-
     // 1. Controle de Visibilidade dos Dashboards
     if (DOM.ordersDashboard) DOM.ordersDashboard.classList.remove('hidden');
     if (DOM.financeDashboard) DOM.financeDashboard.classList.add('hidden');
 
-    // 2. Controle do Botão de Alternância (Entregues vs Pendentes)
+    // 2. Controle do Botão de Alternância
     if (DOM.toggleViewBtn) {
         if (viewType === 'delivered') {
             DOM.toggleViewBtn.textContent = 'Ver Pendentes';
@@ -152,26 +146,20 @@ export const renderOrders = (orders, viewType = 'pending') => {
         }
     }
 
-    // 3. Filtragem
-    DOM.ordersList.innerHTML = ''; // Limpa a lista
+    // 3. Renderização
+    DOM.ordersList.innerHTML = '';
     
     const filteredOrders = orders.filter(order => {
-        if (viewType === 'delivered') {
-            return order.orderStatus === 'Entregue';
-        } else {
-            return order.orderStatus !== 'Entregue';
-        }
+        if (viewType === 'delivered') return order.orderStatus === 'Entregue';
+        return order.orderStatus !== 'Entregue';
     });
 
-    // 4. Ordenação (Data de Entrega mais próxima primeiro)
     filteredOrders.sort((a, b) => {
-        // Trata nulos como "final da fila"
         if (!a.deliveryDate) return 1;
         if (!b.deliveryDate) return -1;
         return new Date(a.deliveryDate) - new Date(b.deliveryDate);
     });
 
-    // 5. Renderização
     if (filteredOrders.length === 0) {
         DOM.ordersList.innerHTML = `
             <div class="col-span-full flex flex-col items-center justify-center py-12 text-gray-400">
@@ -186,6 +174,57 @@ export const renderOrders = (orders, viewType = 'pending') => {
             const card = createOrderCard(order);
             DOM.ordersList.appendChild(card);
         });
+    }
+};
+
+// =============================================================================
+// FUNÇÕES DE CRUD UI (Atualização Granular)
+// =============================================================================
+
+export const addOrderCard = (order, viewType) => {
+    // Se o pedido não pertence à view atual, ignora
+    if (viewType === 'pending' && order.orderStatus === 'Entregue') return;
+    if (viewType === 'delivered' && order.orderStatus !== 'Entregue') return;
+
+    // Se for o primeiro card, remove o placeholder "Nenhum pedido"
+    const placeholder = DOM.ordersList.querySelector('div.col-span-full');
+    if (placeholder) placeholder.remove();
+
+    const card = createOrderCard(order);
+    DOM.ordersList.appendChild(card);
+};
+
+export const updateOrderCard = (order, viewType) => {
+    // Se o status mudou e não pertence mais a esta view, remove
+    if (viewType === 'pending' && order.orderStatus === 'Entregue') {
+        removeOrderCard(order.id);
+        return;
+    }
+    if (viewType === 'delivered' && order.orderStatus !== 'Entregue') {
+        removeOrderCard(order.id);
+        return;
+    }
+
+    const existingCard = document.querySelector(`[data-id="${order.id}"]`);
+    if (existingCard) {
+        const newCard = createOrderCard(order);
+        existingCard.replaceWith(newCard);
+    } else {
+        // Se não existia (ex: filtro ou carregamento tardio), adiciona
+        addOrderCard(order, viewType);
+    }
+};
+
+// ESTA É A FUNÇÃO QUE FALTAVA!
+export const removeOrderCard = (orderId) => {
+    const card = document.querySelector(`[data-id="${orderId}"]`);
+    if (card) {
+        card.remove();
+    }
+    // Se a lista ficar vazia, mostra o placeholder novamente (simplificado)
+    if (DOM.ordersList && DOM.ordersList.children.length === 0) {
+        // Para simplificar, não chamamos renderOrders recursivamente, apenas deixamos vazio até o próximo refresh
+        // ou injetamos o placeholder manualmente se desejar.
     }
 };
 
@@ -206,7 +245,6 @@ export const viewOrder = (order) => {
             if (part.sizes) {
                 const sizesEntries = [];
                 SIZES_ORDER.forEach(size => {
-                    // Verifica categorias padrão
                     ['masculino', 'feminino', 'infantil'].forEach(cat => {
                         if (part.sizes[cat] && part.sizes[cat][size]) {
                             sizesEntries.push(`${size} (${cat.charAt(0).toUpperCase()}): <strong>${part.sizes[cat][size]}</strong>`);
@@ -225,7 +263,7 @@ export const viewOrder = (order) => {
                 partsHTML += `</div>`;
             }
 
-            // Detalhados (Numerados)
+            // Detalhados
             if (part.details && part.details.length > 0) {
                  sizesHTML += `<div class="mt-1 flex flex-wrap gap-1">`;
                  part.details.forEach(det => {
@@ -281,38 +319,16 @@ export const viewOrder = (order) => {
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-
             <div class="p-6">
                 <div class="flex flex-wrap gap-4 mb-6 p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm">
-                    <div>
-                        <span class="block text-gray-400 text-xs uppercase">Status</span>
-                        <span class="font-bold ${getStatusColor(order.orderStatus).split(' ')[1]}">${order.orderStatus}</span>
-                    </div>
-                    <div>
-                        <span class="block text-gray-400 text-xs uppercase">Entrega</span>
-                        <span class="font-bold text-gray-700">${order.deliveryDate ? order.deliveryDate.split('-').reverse().join('/') : '---'}</span>
-                    </div>
-                     <div>
-                        <span class="block text-gray-400 text-xs uppercase">Financeiro</span>
-                        <span class="font-bold text-gray-700">${(order.downPayment >= (order.total || 0)) ? 'Pago' : 'Pendente'}</span>
-                    </div>
+                    <div><span class="block text-gray-400 text-xs uppercase">Status</span><span class="font-bold ${getStatusColor(order.orderStatus).split(' ')[1]}">${order.orderStatus}</span></div>
+                    <div><span class="block text-gray-400 text-xs uppercase">Entrega</span><span class="font-bold text-gray-700">${order.deliveryDate ? order.deliveryDate.split('-').reverse().join('/') : '---'}</span></div>
+                     <div><span class="block text-gray-400 text-xs uppercase">Financeiro</span><span class="font-bold text-gray-700">${(order.downPayment >= (order.total || 0)) ? 'Pago' : 'Pendente'}</span></div>
                 </div>
-
-                <div class="mb-6">
-                    <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 border-b pb-1">Itens do Pedido</h3>
-                    ${partsHTML}
-                </div>
-
-                ${order.generalObservation ? `
-                <div class="mb-6 bg-yellow-50 p-3 rounded border border-yellow-100">
-                    <h4 class="text-xs font-bold text-yellow-700 uppercase mb-1">Observações Gerais</h4>
-                    <p class="text-sm text-yellow-800 whitespace-pre-line">${order.generalObservation}</p>
-                </div>` : ''}
-
+                <div class="mb-6"><h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 border-b pb-1">Itens do Pedido</h3>${partsHTML}</div>
+                ${order.generalObservation ? `<div class="mb-6 bg-yellow-50 p-3 rounded border border-yellow-100"><h4 class="text-xs font-bold text-yellow-700 uppercase mb-1">Observações Gerais</h4><p class="text-sm text-yellow-800 whitespace-pre-line">${order.generalObservation}</p></div>` : ''}
                 ${mockupsHTML}
-
             </div>
-
             <div class="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
                 <button id="comprehensivePdfBtn" data-id="${order.id}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -330,5 +346,5 @@ export const hideViewModal = () => {
     if (!DOM.viewModal) return;
     DOM.viewModal.classList.add('hidden');
     DOM.viewModal.classList.remove('flex');
-    DOM.viewModal.innerHTML = ''; // Limpa memória
+    DOM.viewModal.innerHTML = '';
 };
