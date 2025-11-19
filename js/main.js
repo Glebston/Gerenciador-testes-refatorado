@@ -1,5 +1,6 @@
+// js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.7 "Bomba Atômica")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.8 - Hotfix DOM Sync)
 // ========================================================
 
 // Esta função 'main' assíncrona agora envolve todo o aplicativo.
@@ -103,7 +104,12 @@ async function main() {
                     userCompanyName = user.email; 
                     userBankBalanceConfig = { initialBalance: 0 };
                 }
-                UI.DOM.userEmail.textContent = userCompanyName;
+                
+                // CORREÇÃO CRÍTICA v5.7.8: Atualizado para usar UI.DOM.userEmailDisplay
+                // Blindagem adicionada: Se o elemento não existir, não quebra o app.
+                if (UI.DOM.userEmailDisplay) {
+                    UI.DOM.userEmailDisplay.textContent = userCompanyName;
+                }
                 
                 // --- INICIALIZAÇÃO REATIVA (PÓS-REATORAÇÃO) ---
                 initializeOrderService(userCompanyId, handleOrderChange, () => currentOrdersView);
@@ -125,8 +131,8 @@ async function main() {
 
                 setTimeout(() => {
                     // 1. Oculta o Login e Remove o hidden do App, permitindo que o navegador comece a calcular o layout
-                    UI.DOM.authContainer.classList.add('hidden'); // <--- CORREÇÃO AQUI
-                    UI.DOM.app.classList.remove('hidden');
+                    if (UI.DOM.authContainer) UI.DOM.authContainer.classList.add('hidden');
+                    if (UI.DOM.app) UI.DOM.app.classList.remove('hidden');
 
                     // 2. Primeiro rAF: Espera o navegador agendar a próxima pintura
                     requestAnimationFrame(() => {
@@ -146,8 +152,8 @@ async function main() {
         };
 
         const cleanupApplication = () => {
-            UI.DOM.app.classList.add('hidden');
-            UI.DOM.authContainer.classList.remove('hidden');
+            if (UI.DOM.app) UI.DOM.app.classList.add('hidden');
+            if (UI.DOM.authContainer) UI.DOM.authContainer.classList.remove('hidden');
             
             cleanupOrderService();
             cleanupFinanceService();
@@ -388,6 +394,9 @@ async function main() {
 
             if (needsReminder) {
                 const banner = UI.DOM.backupReminderBanner;
+                
+                // Blindagem: verifica se banner existe antes de acessar
+                if (!banner) return;
 
                 // Passo 1: Estado Inicial
                 // Removemos .hidden para que o elemento exista no layout.
