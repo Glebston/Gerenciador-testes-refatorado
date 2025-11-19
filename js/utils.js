@@ -22,6 +22,19 @@ const SIZES_ORDER = [
 
 // --- Funções Utilitárias de API e Dados ---
 
+/**
+ * NOVO (v4.5.1): Retorna a data atual no formato AAAA-MM-DD respeitando o fuso horário local.
+ * Substitui o uso problemático de new Date().toISOString() que retornava UTC.
+ * @returns {string} Data formatada (ex: "2023-11-19")
+ */
+export const getLocalDateISOString = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Mês começa em 0
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const fileToBase64 = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
