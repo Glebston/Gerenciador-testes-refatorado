@@ -1,5 +1,5 @@
 // ==========================================================
-// MÓDULO MODAL HANDLER (v4.3.0)
+// MÓDULO MODAL HANDLER (v4.5.1 - Estabilizado)
 // Responsabilidade: Gerenciar a exibição e lógica de 
 // todos os modais da aplicação (Info, Confirm, Quitação, etc.)
 // ==========================================================
@@ -7,8 +7,11 @@
 // Importa o DOM do especialista dom.js
 import { DOM, CHECK_ICON_SVG } from './dom.js';
 
-// Importa a função de helper (v5.7.6: Corrigida importação de ui.js para helpers.js)
+// Importa a função de helper
 import { updateSourceSelectionUI } from './helpers.js';
+
+// IMPORTANTE: Nova função de data para corrigir bug de fuso horário (v4.5.1)
+import { getLocalDateISOString } from '../utils.js';
 
 export const showInfoModal = (message) => {
     DOM.infoModalMessage.textContent = message;
@@ -67,7 +70,9 @@ export const showSettlementModal = (orderId, amount) => {
     return new Promise((resolve) => {
         DOM.settlementOrderId.value = orderId;
         DOM.settlementAmountDisplay.textContent = `R$ ${amount.toFixed(2)}`;
-        DOM.settlementDate.value = new Date().toISOString().split('T')[0];
+        
+        // CORREÇÃO (v4.5.1): Usa a data local do navegador, não UTC
+        DOM.settlementDate.value = getLocalDateISOString();
         
         // Define 'banco' como padrão ao abrir
         updateSourceSelectionUI(DOM.settlementSourceContainer, 'banco');
@@ -119,71 +124,67 @@ export const showSettlementModal = (orderId, amount) => {
 };
 
 // ========================================================
-// v5.7.6: INÍCIO - Funções adicionadas para modais com bug de z-index
-// Estes são os modais com z-50 que conflitam com o banner z-50
+// MODAIS GERAIS
+// v4.5.1: Limpeza de Dívida Técnica (Z-Index Manual removido)
+// O controle de sobreposição agora é feito via classes CSS no index.html
 // ========================================================
 
 /**
- * (v5.7.6) Abre o modal de Pedido e aplica o remendo de z-index.
+ * Abre o modal de Pedido.
  */
 export const showOrderModal = () => {
-    DOM.orderModal.style.zIndex = '55'; // Remendo JS para sobrepor CSS em cache
+    // v4.5.1: Removido style.zIndex manual. CSS nativo resolve.
     DOM.orderModal.classList.remove('hidden');
 };
 
 /**
- * (v5.7.6) Fecha o modal de Pedido.
+ * Fecha o modal de Pedido.
  */
 export const hideOrderModal = () => {
     DOM.orderModal.classList.add('hidden');
-    // Não é necessário redefinir o z-index, pois ele será aplicado na próxima abertura
 };
 
 /**
- * (v5.7.6) Abre o modal de Transação e aplica o remendo de z-index.
+ * Abre o modal de Transação.
  */
 export const showTransactionModal = () => {
-    DOM.transactionModal.style.zIndex = '55'; // Remendo JS para sobrepor CSS em cache
+    // v4.5.1: Removido style.zIndex manual.
     DOM.transactionModal.classList.remove('hidden');
 };
 
 /**
- * (v5.7.6) Fecha o modal de Transação.
+ * Fecha o modal de Transação.
  */
 export const hideTransactionModal = () => {
     DOM.transactionModal.classList.add('hidden');
 };
 
 /**
- * (v5.7.6) Abre o modal de Tabela de Preços e aplica o remendo de z-index.
+ * Abre o modal de Tabela de Preços.
  */
 export const showPriceTableModal = () => {
-    DOM.priceTableModal.style.zIndex = '55'; // Remendo JS para sobrepor CSS em cache
+    // v4.5.1: Removido style.zIndex manual.
     DOM.priceTableModal.classList.remove('hidden');
 };
 
 /**
- * (v5.7.6) Fecha o modal de Tabela de Preços.
+ * Fecha o modal de Tabela de Preços.
  */
 export const hidePriceTableModal = () => {
     DOM.priceTableModal.classList.add('hidden');
 };
 
 /**
- * (v5.7.6) Abre o modal de Visualização (Detalhes do Pedido) e aplica o remendo de z-index.
+ * Abre o modal de Visualização (Detalhes do Pedido).
  */
 export const showViewModal = () => {
-    DOM.viewModal.style.zIndex = '55'; // Remendo JS para sobrepor CSS em cache
+    // v4.5.1: Removido style.zIndex manual.
     DOM.viewModal.classList.remove('hidden');
 };
 
 /**
- * (v5.7.6) Fecha o modal de Visualização.
+ * Fecha o modal de Visualização.
  */
 export const hideViewModal = () => {
     DOM.viewModal.classList.add('hidden');
 };
-
-// ========================================================
-// v5.7.6: FIM - Funções adicionadas
-// ========================================================
