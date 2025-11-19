@@ -1,24 +1,15 @@
 // js/listeners/orderListeners.js
+
+// v5.7.22: REMOVIDA importação estática de UI.
+// import * as UI from '../ui.js'; 
 import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf } from '../utils.js';
 
 /**
- * Função utilitária para adicionar listeners com segurança.
- * Evita que a aplicação quebre se um elemento não existir no DOM.
- */
-function safeListener(element, event, handler) {
-    if (element) {
-        element.addEventListener(event, handler);
-    } else {
-        // Aviso silencioso para desenvolvedores, não para o usuário
-        // console.warn(`Elemento não encontrado para o evento: ${event}`);
-    }
-}
-
-/**
  * Coleta os dados do formulário do pedido.
+ * v5.8.4: Adicionada blindagem ao campo UI.DOM.paymentMethod
  */
 function collectFormData(UI) {
-    // Coleta a origem (Banco/Caixa) do adiantamento via Container (Seguro)
+    // Coleta a origem (Banco/Caixa) do adiantamento
     let activeSource = 'banco';
     if (UI.DOM.downPaymentSourceContainer) {
         const activeSourceEl = UI.DOM.downPaymentSourceContainer.querySelector('.source-selector.active');
@@ -27,11 +18,9 @@ function collectFormData(UI) {
         }
     }
     
-    // Seleção segura do status "A Receber"
-    const statusReceiver = document.getElementById('downPaymentStatusAReceber');
-    const isAReceber = statusReceiver ? statusReceiver.checked : false;
+    const isAReceber = UI.DOM.downPaymentStatusAReceber ? UI.DOM.downPaymentStatusAReceber.checked : false;
 
-    // Blindagem do paymentMethod
+    // APLICADA A BLINDAGEM AO paymentMethod
     const paymentMethodValue = UI.DOM.paymentMethod ? UI.DOM.paymentMethod.value : '';
 
     const data = {
@@ -42,15 +31,13 @@ function collectFormData(UI) {
         deliveryDate: UI.DOM.deliveryDate.value, 
         generalObservation: UI.DOM.generalObservation.value,
         parts: [], 
-        // CORREÇÃO DE NOMES AQUI (Input suffix)
-        downPayment: parseFloat(UI.DOM.downPaymentInput.value) || 0, 
-        discount: parseFloat(UI.DOM.discountInput.value) || 0,
-        paymentMethod: paymentMethodValue,
-        // CORREÇÃO: mockupFilesInput
+        downPayment: parseFloat(UI.DOM.downPayment.value) || 0, 
+        discount: parseFloat(UI.DOM.discount.value) || 0,
+        paymentMethod: paymentMethodValue, // Agora é seguro
         mockupUrls: Array.from(UI.DOM.existingFilesContainer.querySelectorAll('a')).map(a => a.href),
         
         // Novos campos da "Ponte"
-        downPaymentDate: UI.DOM.downPaymentDateInput ? UI.DOM.downPaymentDateInput.value : new Date().toISOString().split('T')[0],
+        downPaymentDate: UI.DOM.downPaymentDate ? UI.DOM.downPaymentDate.value : new Date().toISOString().split('T')[0],
         paymentFinSource: activeSource,
         paymentFinStatus: isAReceber ? 'a_receber' : 'pago'
     };
@@ -77,39 +64,41 @@ function collectFormData(UI) {
 
 /**
  * Inicializa todos os event listeners relacionados a Pedidos.
+ * v5.7.22: A função agora recebe o módulo 'UI' injetado pelo main.js.
  */
 export function initializeOrderListeners(UI, deps) {
 
     const { getState, setState, getOptionsFromStorage, services, userCompanyName } = deps;
 
     // --- Funcionalidades de Pedidos ---
-    safeListener(UI.DOM.addOrderBtn, 'click', () => { 
+    UI.DOM.addOrderBtn.addEventListener('click', () => { 
         setState({ partCounter: 0 }); 
         UI.resetForm(); 
         UI.showOrderModal(); 
     });
 
     // ========================================================
-    // LÓGICA DA "PONTE" (FORMULÁRIO DE PEDIDO)
+    // v5.0: LÓGICA DA "PONTE" (FORMULÁRIO DE PEDIDO)
     // ========================================================
-    safeListener(UI.DOM.orderForm, 'submit', async (e) => {
+    UI.DOM.orderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if(UI.DOM.saveBtn) UI.DOM.saveBtn.disabled = true; 
-        if(UI.DOM.uploadIndicator) UI.DOM.uploadIndicator.classList.remove('hidden');
+        UI.DOM.saveBtn.disabled = true; 
+        UI.DOM.uploadIndicator.classList.remove('hidden');
         
         try {
-            // CORREÇÃO: mockupFilesInput
-            const files = UI.DOM.mockupFilesInput ? UI.DOM.mockupFilesInput.files : [];
+            // --- ETAPA 1: Upload de Arquivos ---
+            const files = UI.DOM.mockupFiles.files;
             const uploadPromises = Array.from(files).map(file => fileToBase64(file).then(uploadToImgBB));
             const newUrls = (await Promise.all(uploadPromises)).filter(Boolean);
             
+            // --- ETAPA 2: Coletar Dados e Salvar Pedido ---
             const orderData = collectFormData(UI); 
             orderData.mockupUrls.push(...newUrls);
             
-            // CORREÇÃO: orderIdInput
-            const orderId = UI.DOM.orderIdInput.value;
+            const orderId = UI.DOM.orderId.value;
             const savedOrderId = await services.saveOrder(orderData, orderId); 
             
+            // --- ETAPA 3: A LÓGICA DA "PONTE" FINANCEIRA ---
             const downPaymentAmount = parseFloat(orderData.downPayment) || 0;
             const clientName = orderData.clientName;
 
@@ -142,6 +131,7 @@ export function initializeOrderListeners(UI, deps) {
                 }
             }
 
+            // --- ETAPA 4: Feedback ---
             UI.hideOrderModal();
             
             if (orderData.orderStatus === 'Finalizado' || orderData.orderStatus === 'Entregue') {
@@ -162,15 +152,15 @@ export function initializeOrderListeners(UI, deps) {
             console.error("Erro ao salvar pedido:", error);
             UI.showInfoModal('Ocorreu um erro ao salvar o pedido. Por favor, verifique os dados e tente novamente.'); 
         } finally { 
-            if(UI.DOM.saveBtn) UI.DOM.saveBtn.disabled = false; 
-            if(UI.DOM.uploadIndicator) UI.DOM.uploadIndicator.classList.add('hidden'); 
+            UI.DOM.saveBtn.disabled = false; 
+            UI.DOM.uploadIndicator.classList.add('hidden'); 
         }
     });
+    // ========================================================
+    // FIM DA LÓGICA DA "PONTE"
+    // ========================================================
 
-    // ========================================================
-    // LISTA DE PEDIDOS E BOTÕES DE AÇÃO
-    // ========================================================
-    safeListener(UI.DOM.ordersList, 'click', async (e) => {
+    UI.DOM.ordersList.addEventListener('click', async (e) => {
         const btn = e.target.closest('button');
         if (!btn || !btn.dataset.id) return;
 
@@ -183,6 +173,7 @@ export function initializeOrderListeners(UI, deps) {
             partCounter = 0;
             partCounter = UI.populateFormForEdit(order, partCounter);
             setState({ partCounter });
+            
             UI.showOrderModal();
             
         } else if (btn.classList.contains('replicate-btn')) {
@@ -191,23 +182,18 @@ export function initializeOrderListeners(UI, deps) {
             partCounter = UI.populateFormForEdit(order, partCounter);
             setState({ partCounter });
             
-            // CORREÇÃO: orderIdInput
-            UI.DOM.orderIdInput.value = ''; 
+            UI.DOM.orderId.value = ''; 
             UI.DOM.modalTitle.textContent = 'Novo Pedido (Replicado)';
             UI.DOM.orderStatus.value = 'Pendente'; 
             UI.DOM.orderDate.value = new Date().toISOString().split('T')[0];
             UI.DOM.deliveryDate.value = ''; 
-            // CORREÇÃO: Inputs corretos
-            UI.DOM.discountInput.value = ''; 
-            UI.DOM.downPaymentInput.value = '';
+            UI.DOM.discount.value = ''; 
+            UI.DOM.downPayment.value = '';
             UI.updateFinancials();
             
-            if(UI.DOM.downPaymentDateInput) UI.DOM.downPaymentDateInput.value = new Date().toISOString().split('T')[0];
-            // Nota: downPaymentStatusPago é acessado via DOM global ou check interno na UI helpers
-            
-            if (UI.DOM.downPaymentSourceContainer) {
-                UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, 'banco');
-            }
+            UI.DOM.downPaymentDate.value = new Date().toISOString().split('T')[0];
+            UI.DOM.downPaymentStatusPago.checked = true;
+            UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, 'banco');
             
             UI.showOrderModal();
             
@@ -304,8 +290,7 @@ export function initializeOrderListeners(UI, deps) {
         }
     });
 
-    // Listeners do ViewModal
-    safeListener(UI.DOM.viewModal, 'click', (e) => {
+    UI.DOM.viewModal.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         if (!btn) return;
 
@@ -319,25 +304,24 @@ export function initializeOrderListeners(UI, deps) {
     });
 
     // --- Interações dentro do Modal de Pedidos ---
-    safeListener(UI.DOM.cancelBtn, 'click', () => UI.hideOrderModal());
+    UI.DOM.cancelBtn.addEventListener('click', () => UI.hideOrderModal());
     
-    safeListener(UI.DOM.addPartBtn, 'click', () => { 
+    UI.DOM.addPartBtn.addEventListener('click', () => { 
         let { partCounter } = getState();
         partCounter++; 
         UI.addPart({}, partCounter); 
         setState({ partCounter });
     });
     
-    // CORREÇÃO: Uso dos nomes corretos com safeListener
-    safeListener(UI.DOM.downPaymentInput, 'input', UI.updateFinancials);
-    safeListener(UI.DOM.discountInput, 'input', UI.updateFinancials);
+    UI.DOM.downPayment.addEventListener('input', UI.updateFinancials);
+    UI.DOM.discount.addEventListener('input', UI.updateFinancials);
 
-    safeListener(UI.DOM.clientPhone, 'input', (e) => {
-        e.target.value = UI.formatPhoneNumber(e.target.value);
+    UI.DOM.clientPhone.addEventListener('input', (e) => {
+     e.target.value = UI.formatPhoneNumber(e.target.value);
     });
 
     // Listener delegado para o modal de pedido
-    safeListener(UI.DOM.orderModal, 'click', (e) => {
+    UI.DOM.orderModal.addEventListener('click', (e) => {
         const optionsBtn = e.target.closest('button.manage-options-btn'); 
         if (optionsBtn) { 
             const currentOptionType = optionsBtn.dataset.type;
@@ -351,7 +335,7 @@ export function initializeOrderListeners(UI, deps) {
         }
         
         const sourceBtn = e.target.closest('#downPaymentSourceContainer .source-selector');
-        if (sourceBtn && UI.DOM.downPaymentSourceContainer) {
+        if (sourceBtn) {
             UI.updateSourceSelectionUI(UI.DOM.downPaymentSourceContainer, sourceBtn.dataset.source);
         }
     });
