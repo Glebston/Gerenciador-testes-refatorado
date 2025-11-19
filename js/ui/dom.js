@@ -1,7 +1,11 @@
-/* * PAGLUCRO GESTOR - DOM Map (v4.5.1)
+/* * PAGLUCRO GESTOR - DOM Map (v4.5.2 - Hotfix)
  * Mapeamento centralizado de todos os elementos HTML.
  * Sincronizado com index.html v5.7.57
+ * CORREÇÃO: Reintroduzido CHECK_ICON_SVG
  */
+
+// Constante visual usada em feedbacks (helpers.js e modalHandler.js)
+export const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
 
 export const DOM = {
     // =========================================================================
