@@ -1,11 +1,12 @@
 // ==========================================================
-// MÓDULO DOM (v4.3.0 - Patch v5.8.2)
+// MÓDULO DOM (v4.5.1 - Patch de Correção)
 // Responsabilidade: Centralizar todos os seletores de 
 // elementos do DOM da aplicação.
 // ==========================================================
 
 // Constantes de UI
 export const CHECK_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+
 export const SIZES_ORDER = [
     'PP', 'P', 'M', 'G', 'GG', 'XG',
     '2 anos', '4 anos', '6 anos', '8 anos', '10 anos', '12 anos'
@@ -73,7 +74,11 @@ export const DOM = {
     // Seletores específicos para radio buttons requerem querySelector
     downPaymentStatusPago: document.querySelector('input[name="downPaymentStatus"][value="pago"]'),
     downPaymentStatusAReceber: document.querySelector('input[name="downPaymentStatus"][value="a_receber"]'),
+    
     discount: document.getElementById('discount'),
+    // CORREÇÃO v4.5.1: Adicionado para evitar referências indefinidas no formHandler
+    paymentMethod: document.getElementById('paymentMethod'), 
+    
     grandTotal: document.getElementById('grandTotal'),
     remainingTotal: document.getElementById('remainingTotal'),
     
@@ -144,7 +149,7 @@ export const DOM = {
     topExpensesByCategory: document.getElementById('topExpensesByCategory'),
     topIncomesByCategory: document.getElementById('topIncomesByCategory'),
 
-    // --- Modal de Transação (CORREÇÃO v5.8.2) ---
+    // --- Modal de Transação ---
     transactionModal: document.getElementById('transactionModal'),
     transactionModalTitle: document.getElementById('transactionModalTitle'),
     transactionForm: document.getElementById('transactionForm'),
@@ -157,7 +162,7 @@ export const DOM = {
     transactionType: document.getElementById('transactionType'),
     cancelTransactionBtn: document.getElementById('cancelTransactionBtn'),
     
-    // Campos adicionados na v5.8.1 - Se o HTML não tiver estes IDs, estas variáveis serão NULL
+    // Campos de status (radio buttons) do Modal de Transação
     transactionStatusContainer: document.getElementById('transactionStatusContainer'),
     pago: document.querySelector('input[name="transactionStatus"][value="pago"]'),
     a_receber: document.querySelector('input[name="transactionStatus"][value="a_receber"]'),
