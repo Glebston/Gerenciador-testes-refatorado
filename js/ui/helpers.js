@@ -1,150 +1,73 @@
+// ==========================================================
+// MÓDULO UI HELPERS (v4.3.0 - Patch v5.8.1)
+// Responsabilidade: Fornecer funções "ajudantes"
+// genéricas usadas por outros módulos da UI.
+// (Ex: formatar telefone, atualizar botões, etc.)
+// ==========================================================
+
 import { DOM, CHECK_ICON_SVG } from './dom.js';
 
-// =============================================================================
-// FORMATADORES
-// =============================================================================
-
-export const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value);
-};
-
-export const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const [year, month, day] = dateString.split('-');
-    return `${day}/${month}/${year}`;
-};
-
-export const formatPhoneNumber = (v) => {
-    if (!v) return '';
-    v = v.replace(/\D/g, "");
-    v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
-    v = v.replace(/(\d)(\d{4})$/, "$1-$2");
-    return v;
-};
-
-// =============================================================================
-// MANIPULAÇÃO DE UI (Helpers)
-// =============================================================================
-
-/**
- * Atualiza o estilo do botão de Navegação (Financeiro vs Pedidos)
- * Esta era a função que faltava!
- */
-export const updateNavButton = (currentView) => {
-    const btn = DOM.financeDashboardBtn;
-    if (!btn) return;
-
-    if (currentView === 'finance') {
-        // Estilo Ativo (Sólido)
-        btn.classList.remove('bg-white', 'text-indigo-600', 'hover:bg-indigo-50');
-        btn.classList.add('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
-        btn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            Voltar para Pedidos
-        `;
+// Funções de UI Geral
+export const updateNavButton = (currentDashboardView) => {
+    const isOrdersView = currentDashboardView === 'orders';
+    if (isOrdersView) {
+        DOM.financeDashboardBtn.innerHTML = `📊 Financeiro`;
     } else {
-        // Estilo Inativo (Outline)
-        btn.classList.remove('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
-        btn.classList.add('bg-white', 'text-indigo-600', 'hover:bg-indigo-50');
-        btn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Gestão Financeira
-        `;
+        DOM.financeDashboardBtn.innerHTML = `📋 Pedidos`;
     }
 };
 
+export const handleCookieConsent = () => {
+    if (localStorage.getItem('cookieConsent')) {
+        DOM.cookieBanner.classList.add('hidden');
+    } else {
+        DOM.cookieBanner.classList.remove('hidden');
+    }
+};
+
+/**
+ * Atualiza a UI dos seletores de origem (Banco/Caixa)
+ * @param {HTMLElement} container - O elemento container (ex: DOM.transactionSourceContainer)
+ * @param {string} selectedSource - 'banco' ou 'caixa'
+ */
 export const updateSourceSelectionUI = (container, selectedSource) => {
     if (!container) return;
-    
-    const buttons = container.querySelectorAll('button');
-    buttons.forEach(btn => {
-        const source = btn.getAttribute('data-source');
+    container.querySelectorAll('.source-selector').forEach(btn => {
+        const isSelected = btn.dataset.source === selectedSource;
+        btn.classList.toggle('active', isSelected);
         
-        if (source === selectedSource) {
-            btn.classList.remove('bg-slate-100', 'text-slate-600', 'border-slate-200');
-            btn.classList.add('bg-indigo-50', 'text-indigo-700', 'border-indigo-200', 'ring-1', 'ring-indigo-200');
-        } else {
-            btn.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
-            btn.classList.remove('bg-indigo-50', 'text-indigo-700', 'border-indigo-200', 'ring-1', 'ring-indigo-200');
+        // === CORREÇÃO v5.8.1 (Blindagem) ===
+        // Verifica se o elemento de ícone existe antes de tentar manipulá-lo.
+        // Isso permite usar essa função tanto no Modal de Pedidos (com ícone)
+        // quanto no Modal de Transações (sem ícone).
+        const iconPlaceholder = btn.querySelector('.icon-placeholder');
+        if (iconPlaceholder) {
+            iconPlaceholder.innerHTML = isSelected ? CHECK_ICON_SVG : '';
         }
     });
 };
 
-export const populateDropdown = (selectElement, options) => {
-    if (!selectElement) return;
-    selectElement.innerHTML = '<option value="">Selecione...</option>';
-    options.forEach(opt => {
-        const option = document.createElement('option');
-        const value = typeof opt === 'object' ? opt.value : opt;
-        const label = typeof opt === 'object' ? opt.label : opt;
-        option.value = value;
-        option.textContent = label;
-        selectElement.appendChild(option);
-    });
-};
-
 export const populateDatalists = (partTypes, materialTypes) => {
-    const typeList = document.getElementById('part-type-list');
-    const materialList = document.getElementById('part-material-list');
-
-    if (typeList) {
-        typeList.innerHTML = '';
-        (partTypes || []).forEach(type => {
-            const option = document.createElement('option');
-            option.value = type;
-            typeList.appendChild(option);
-        });
-    }
-
-    if (materialList) {
-        materialList.innerHTML = '';
-        (materialTypes || []).forEach(material => {
-            const option = document.createElement('option');
-            option.value = material;
-            materialList.appendChild(option);
-        });
-    }
+    DOM.partTypeList.innerHTML = partTypes.map(opt => `<option value="${opt}"></option>`).join('');
+    DOM.partMaterialList.innerHTML = materialTypes.map(opt => `<option value="${opt}"></option>`).join('');
 };
 
-// =============================================================================
-// FEEDBACK AO USUÁRIO (TOASTS)
-// =============================================================================
-
-export const showFeedback = (message, type = 'success') => {
-    const existingToast = document.getElementById('toast-feedback');
-    if (existingToast) existingToast.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'toast-feedback';
-    
-    const colors = type === 'success' 
-        ? 'bg-white border-l-4 border-green-500 text-slate-800' 
-        : 'bg-white border-l-4 border-red-500 text-slate-800';
-
-    const icon = type === 'success' ? CHECK_ICON_SVG : '⚠️';
-
-    toast.className = `fixed top-5 right-5 z-[100] flex items-center p-4 rounded shadow-2xl transform transition-all duration-300 translate-y-[-20px] opacity-0 ${colors}`;
-    
-    toast.innerHTML = `
-        <div class="mr-3">${icon}</div>
-        <div class="font-medium">${message}</div>
-    `;
-
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => {
-        toast.classList.remove('translate-y-[-20px]', 'opacity-0');
-    });
-
-    setTimeout(() => {
-        toast.classList.add('translate-y-[-20px]', 'opacity-0');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+export const openOptionsModal = (type, options) => {
+    const title = type === 'partTypes' ? 'Tipos de Peça' : 'Tipos de Material';
+    DOM.optionsModalTitle.textContent = `Gerenciar ${title}`;
+    DOM.optionsList.innerHTML = options.map((opt, index) =>
+        `<div class="flex justify-between items-center p-2 bg-gray-100 rounded-md">
+            <span>${opt}</span>
+            <button class="delete-option-btn text-red-500 hover:text-red-700 font-bold" data-index="${index}">&times;</button>
+        </div>`
+    ).join('');
+    DOM.optionsModal.classList.remove('hidden');
 };
+
+export const formatPhoneNumber = (value) => {
+    if (!value) return "";
+    value = value.replace(/\D/g,'');             // Remove tudo o que não é dígito
+    value = value.replace(/^(\d{2})(\d)/g,'($1) $2'); // Coloca parênteses em volta dos dois primeiros dígitos
+    value = value.replace(/(\d)(\d{4})$/,'$1-$2');    // Coloca hífen entre o quarto e o quinto dígitos
+    return value;
+}
