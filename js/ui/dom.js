@@ -1,12 +1,21 @@
-/* * PAGLUCRO GESTOR - DOM Map (v4.5.2 - Hotfix)
- * Mapeamento centralizado de todos os elementos HTML.
+/* * PAGLUCRO GESTOR - DOM Map (v4.5.3 - Hotfix Cumulative)
+ * Mapeamento centralizado de todos os elementos HTML e Constantes Visuais.
  * Sincronizado com index.html v5.7.57
- * CORREÇÃO: Reintroduzido CHECK_ICON_SVG
  */
 
-// Constante visual usada em feedbacks (helpers.js e modalHandler.js)
+// =============================================================================
+// CONSTANTES VISUAIS E UTILITÁRIAS (Restauradas para compatibilidade)
+// =============================================================================
+
+// Ícone usado em feedbacks (helpers.js)
 export const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
 
+// Ordem de Tamanhos usada para renderização (orderRenderer.js e formHandler.js)
+export const SIZES_ORDER = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'G1', 'G2', 'G3', 'UN'];
+
+// =============================================================================
+// MAPEAMENTO DO DOM
+// =============================================================================
 export const DOM = {
     // =========================================================================
     // 1. LAYOUT & AUTH
@@ -105,16 +114,12 @@ export const DOM = {
     financialsContainer: document.getElementById('financialsContainer'),
     downPaymentInput: document.getElementById('downPayment'),
     downPaymentDateInput: document.getElementById('downPaymentDate'),
-    // downPaymentSource: REMOVIDO (Era código morto no HTML)
-    downPaymentSourceContainer: document.getElementById('downPaymentSourceContainer'), // Mantido (Container dos botões)
-    paymentMethod: document.getElementById('paymentMethod'), // NOVO (v4.5.1)
+    downPaymentSourceContainer: document.getElementById('downPaymentSourceContainer'), 
+    paymentMethod: document.getElementById('paymentMethod'), // Campo novo
     discountInput: document.getElementById('discount'),
     grandTotalDisplay: document.getElementById('grandTotal'),
     remainingTotalDisplay: document.getElementById('remainingTotal'),
     
-    // Radios (Selecionados via querySelector pois não têm ID único fácil)
-    // Nota: Radios de downPaymentStatus são pegos dinamicamente no formHandler
-
     // =========================================================================
     // 5. OUTROS MODAIS
     // =========================================================================
@@ -179,7 +184,7 @@ export const DOM = {
     cancelResetBtn: document.getElementById('cancelResetBtn'),
     sendResetEmailBtn: document.getElementById('sendResetEmailBtn'),
 
-    // Modais de Sistema (Idle, Options, Cookie, Backup)
+    // Modais de Sistema
     idleModal: document.getElementById('idleModal'),
     countdownTimer: document.getElementById('countdownTimer'),
     stayLoggedInBtn: document.getElementById('stayLoggedInBtn'),
@@ -198,7 +203,7 @@ export const DOM = {
     backupNowBtn: document.getElementById('backupNowBtn'),
 
     // =========================================================================
-    // 6. TEMPLATES
+    // 6. TEMPLATES & DATALISTS
     // =========================================================================
     partTemplate: document.getElementById('partTemplate'),
     comumPartContentTemplate: document.getElementById('comumPartContentTemplate'),
@@ -206,7 +211,6 @@ export const DOM = {
     specificSizeRowTemplate: document.getElementById('specificSizeRowTemplate'),
     financialRowTemplate: document.getElementById('financialRowTemplate'),
     
-    // DataLists
     partTypeList: document.getElementById('part-type-list'),
     partMaterialList: document.getElementById('part-material-list'),
 };
