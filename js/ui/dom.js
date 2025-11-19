@@ -1,216 +1,178 @@
-/* * PAGLUCRO GESTOR - DOM Map (v4.5.3 - Hotfix Cumulative)
- * Mapeamento centralizado de todos os elementos HTML e Constantes Visuais.
- * Sincronizado com index.html v5.7.57
- */
+// ==========================================================
+// MÓDULO DOM (v4.3.0 - Patch v5.8.2)
+// Responsabilidade: Centralizar todos os seletores de 
+// elementos do DOM da aplicação.
+// ==========================================================
 
-// =============================================================================
-// CONSTANTES VISUAIS E UTILITÁRIAS (Restauradas para compatibilidade)
-// =============================================================================
+// Constantes de UI
+export const CHECK_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+export const SIZES_ORDER = [
+    'PP', 'P', 'M', 'G', 'GG', 'XG',
+    '2 anos', '4 anos', '6 anos', '8 anos', '10 anos', '12 anos'
+];
 
-// Ícone usado em feedbacks (helpers.js)
-export const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-
-// Ordem de Tamanhos usada para renderização (orderRenderer.js e formHandler.js)
-export const SIZES_ORDER = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'G1', 'G2', 'G3', 'UN'];
-
-// =============================================================================
-// MAPEAMENTO DO DOM
-// =============================================================================
+// Centraliza todos os seletores de elementos do DOM
 export const DOM = {
-    // =========================================================================
-    // 1. LAYOUT & AUTH
-    // =========================================================================
+    // --- Autenticação ---
     authContainer: document.getElementById('authContainer'),
     loginForm: document.getElementById('loginForm'),
-    loginEmailInput: document.getElementById('loginEmail'),
-    loginPasswordInput: document.getElementById('loginPassword'),
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
     forgotPasswordBtn: document.getElementById('forgotPasswordBtn'),
-    
+    logoutBtn: document.getElementById('logoutBtn'),
+    forgotPasswordModal: document.getElementById('forgotPasswordModal'),
+    resetEmailInput: document.getElementById('resetEmailInput'),
+    sendResetEmailBtn: document.getElementById('sendResetEmailBtn'),
+    cancelResetBtn: document.getElementById('cancelResetBtn'),
+
+    // --- Layout Base ---
     app: document.getElementById('app'),
     mainContent: document.getElementById('mainContent'),
-    
-    // Header & Menu
+    userEmail: document.getElementById('userEmail'),
     userMenuBtn: document.getElementById('userMenuBtn'),
-    userEmailDisplay: document.getElementById('userEmail'),
     userDropdown: document.getElementById('userDropdown'),
-    logoutBtn: document.getElementById('logoutBtn'),
+    requestDeletionBtn: document.getElementById('requestDeletionBtn'),
+    cookieBanner: document.getElementById('cookieBanner'),
+    cookieAcceptBtn: document.getElementById('cookieAcceptBtn'),
+    
+    // --- Navegação e Dashboards ---
+    ordersDashboard: document.getElementById('ordersDashboard'),
+    financeDashboard: document.getElementById('financeDashboard'),
+    financeDashboardBtn: document.getElementById('financeDashboardBtn'),
+    toggleViewBtn: document.getElementById('toggleViewBtn'),
+    priceTableBtn: document.getElementById('priceTableBtn'),
     backupBtn: document.getElementById('backupBtn'),
     restoreFileInput: document.getElementById('restoreFile'),
-    requestDeletionBtn: document.getElementById('requestDeletionBtn'),
-    financeDashboardBtn: document.getElementById('financeDashboardBtn'),
-    toggleViewBtn: document.getElementById('toggleViewBtn'), // Ver Entregues
     
-    // =========================================================================
-    // 2. DASHBOARD PEDIDOS
-    // =========================================================================
-    ordersDashboard: document.getElementById('ordersDashboard'),
+    // --- Dashboard de Pedidos ---
     ordersList: document.getElementById('ordersList'),
+    loadingIndicator: document.getElementById('loadingIndicator'),
     addOrderBtn: document.getElementById('addOrderBtn'),
-    priceTableBtn: document.getElementById('priceTableBtn'),
-    
-    // =========================================================================
-    // 3. DASHBOARD FINANCEIRO
-    // =========================================================================
-    financeDashboard: document.getElementById('financeDashboard'),
-    
-    // KPIs
-    faturamentoBruto: document.getElementById('faturamentoBruto'),
-    despesasTotais: document.getElementById('despesasTotais'),
-    lucroLiquido: document.getElementById('lucroLiquido'),
-    contasAReceber: document.getElementById('contasAReceber'),
-    saldoEmConta: document.getElementById('saldoEmConta'),
-    saldoEmCaixa: document.getElementById('saldoEmCaixa'),
-    adjustBalanceBtn: document.getElementById('adjustBalanceBtn'),
 
-    // Filtros & Ações
-    periodFilter: document.getElementById('periodFilter'),
-    customPeriodContainer: document.getElementById('customPeriodContainer'),
-    startDateInput: document.getElementById('startDateInput'),
-    endDateInput: document.getElementById('endDateInput'),
-    copyReportBtn: document.getElementById('copyReportBtn'),
-
-    // Tops
-    topExpensesByCategory: document.getElementById('topExpensesByCategory'),
-    topIncomesByCategory: document.getElementById('topIncomesByCategory'),
-
-    // Extrato
-    transactionSearchInput: document.getElementById('transactionSearchInput'),
-    addIncomeBtn: document.getElementById('addIncomeBtn'),
-    addExpenseBtn: document.getElementById('addExpenseBtn'),
-    transactionsList: document.getElementById('transactionsList'),
-
-    // =========================================================================
-    // 4. MODAL DE PEDIDO (Novo/Editar)
-    // =========================================================================
+    // --- Modal de Pedido ---
     orderModal: document.getElementById('orderModal'),
-    modalTitle: document.getElementById('modalTitle'),
-    closeOrderModalX: document.getElementById('closeOrderModalX'),
     orderForm: document.getElementById('orderForm'),
-    orderIdInput: document.getElementById('orderId'), // Hidden
-    cancelBtn: document.getElementById('cancelBtn'),
-    saveBtn: document.getElementById('saveBtn'),
-    uploadIndicator: document.getElementById('uploadIndicator'),
-
-    // Campos: Cliente & Prazo
+    modalTitle: document.getElementById('modalTitle'),
+    orderId: document.getElementById('orderId'),
     clientName: document.getElementById('clientName'),
     clientPhone: document.getElementById('clientPhone'),
     orderStatus: document.getElementById('orderStatus'),
     orderDate: document.getElementById('orderDate'),
     deliveryDate: document.getElementById('deliveryDate'),
-
-    // Campos: Arquivos
-    mockupFilesInput: document.getElementById('mockupFiles'),
-    fileCountDisplay: document.getElementById('fileCount'),
+    mockupFiles: document.getElementById('mockupFiles'),
     existingFilesContainer: document.getElementById('existingFilesContainer'),
-
-    // Campos: Peças
     partsContainer: document.getElementById('partsContainer'),
     addPartBtn: document.getElementById('addPartBtn'),
-
-    // Campos: Observação
     generalObservation: document.getElementById('generalObservation'),
-
-    // Campos: Financeiro (Dentro do Pedido)
     financialsContainer: document.getElementById('financialsContainer'),
-    downPaymentInput: document.getElementById('downPayment'),
-    downPaymentDateInput: document.getElementById('downPaymentDate'),
-    downPaymentSourceContainer: document.getElementById('downPaymentSourceContainer'), 
-    paymentMethod: document.getElementById('paymentMethod'), // Campo novo
-    discountInput: document.getElementById('discount'),
-    grandTotalDisplay: document.getElementById('grandTotal'),
-    remainingTotalDisplay: document.getElementById('remainingTotal'),
     
-    // =========================================================================
-    // 5. OUTROS MODAIS
-    // =========================================================================
+    // Fechamento Financeiro do Pedido
+    downPayment: document.getElementById('downPayment'),
+    downPaymentDate: document.getElementById('downPaymentDate'),
+    downPaymentSourceContainer: document.getElementById('downPaymentSourceContainer'),
+    // Seletores específicos para radio buttons requerem querySelector
+    downPaymentStatusPago: document.querySelector('input[name="downPaymentStatus"][value="pago"]'),
+    downPaymentStatusAReceber: document.querySelector('input[name="downPaymentStatus"][value="a_receber"]'),
+    discount: document.getElementById('discount'),
+    grandTotal: document.getElementById('grandTotal'),
+    remainingTotal: document.getElementById('remainingTotal'),
     
-    // Modal de Confirmação (Genérico)
+    cancelBtn: document.getElementById('cancelBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    uploadIndicator: document.getElementById('uploadIndicator'),
+
+    // --- Modais Auxiliares ---
+    viewModal: document.getElementById('viewModal'),
+    infoModal: document.getElementById('infoModal'),
+    infoModalMessage: document.getElementById('infoModalMessage'),
+    infoModalCloseBtn: document.getElementById('infoModalCloseBtn'),
     confirmModal: document.getElementById('confirmModal'),
-    confirmMessage: document.getElementById('confirmModalMessage'),
+    confirmModalMessage: document.getElementById('confirmModalMessage'),
     confirmOkBtn: document.getElementById('confirmOkBtn'),
     confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+    idleModal: document.getElementById('idleModal'),
+    stayLoggedInBtn: document.getElementById('stayLoggedInBtn'),
+    countdownTimer: document.getElementById('countdownTimer'),
+    
+    // --- Gerenciamento de Opções ---
+    optionsModal: document.getElementById('optionsModal'),
+    optionsModalTitle: document.getElementById('optionsModalTitle'),
+    optionsList: document.getElementById('optionsList'),
+    newOptionInput: document.getElementById('newOptionInput'),
+    addOptionBtn: document.getElementById('addOptionBtn'),
+    closeOptionsModalBtn: document.getElementById('closeOptionsModalBtn'),
+    partTypeList: document.getElementById('part-type-list'),
+    partMaterialList: document.getElementById('part-material-list'),
 
-    // Modal de Informação (Alert)
-    infoModal: document.getElementById('infoModal'),
-    infoMessage: document.getElementById('infoModalMessage'),
-    infoCloseBtn: document.getElementById('infoModalCloseBtn'),
-
-    // Modal "Visualizar Pedido" (ReadOnly)
-    viewModal: document.getElementById('viewModal'),
-
-    // Modal "Quitar Pedido"
-    settlementModal: document.getElementById('settlementModal'),
-    settlementOrderId: document.getElementById('settlementOrderId'),
-    settlementAmountDisplay: document.getElementById('settlementAmountDisplay'),
-    settlementDate: document.getElementById('settlementDate'),
-    settlementSourceContainer: document.getElementById('settlementSourceContainer'),
-    settlementConfirmBtn: document.getElementById('settlementConfirmBtn'),
-    settlementCancelBtn: document.getElementById('settlementCancelBtn'),
-
-    // Modal de Transação (Avulsa)
-    transactionModal: document.getElementById('transactionModal'),
-    transactionModalTitle: document.getElementById('transactionModalTitle'),
-    transactionForm: document.getElementById('transactionForm'),
-    transactionIdInput: document.getElementById('transactionId'),
-    transactionTypeInput: document.getElementById('transactionType'),
-    transactionDateInput: document.getElementById('transactionDate'),
-    transactionDescriptionInput: document.getElementById('transactionDescription'),
-    transactionCategoryInput: document.getElementById('transactionCategory'),
-    transactionAmountInput: document.getElementById('transactionAmount'),
-    transactionSourceContainer: document.getElementById('transactionSourceContainer'),
-    transactionStatusContainer: document.getElementById('transactionStatusContainer'),
-    cancelTransactionBtn: document.getElementById('cancelTransactionBtn'),
-    saveTransactionBtn: document.getElementById('saveTransactionBtn'),
-
-    // Modal Tabela de Preços
+    // --- Modal de Tabela de Preços ---
     priceTableModal: document.getElementById('priceTableModal'),
+    priceTableModalTitle: document.getElementById('priceTableModalTitle'),
     priceTableContainer: document.getElementById('priceTableContainer'),
+    priceTableFooter: document.getElementById('priceTableFooter'),
+    priceTableEditMessage: document.getElementById('priceTableEditMessage'),
     editPriceTableBtn: document.getElementById('editPriceTableBtn'),
     addPriceItemBtn: document.getElementById('addPriceItemBtn'),
     savePriceTableBtn: document.getElementById('savePriceTableBtn'),
     cancelPriceTableBtn: document.getElementById('cancelPriceTableBtn'),
     closePriceTableBtn: document.getElementById('closePriceTableBtn'),
-    priceTableEditMessage: document.getElementById('priceTableEditMessage'),
 
-    // Modal Saldo Inicial
+    // --- Dashboard Financeiro (KPIs e Filtros) ---
+    periodFilter: document.getElementById('periodFilter'),
+    customPeriodContainer: document.getElementById('customPeriodContainer'),
+    startDateInput: document.getElementById('startDateInput'),
+    endDateInput: document.getElementById('endDateInput'),
+    copyReportBtn: document.getElementById('copyReportBtn'),
+    faturamentoBruto: document.getElementById('faturamentoBruto'),
+    despesasTotais: document.getElementById('despesasTotais'),
+    contasAReceber: document.getElementById('contasAReceber'),
+    lucroLiquido: document.getElementById('lucroLiquido'),
+    saldoEmConta: document.getElementById('saldoEmConta'),
+    saldoEmCaixa: document.getElementById('saldoEmCaixa'),
+    adjustBalanceBtn: document.getElementById('adjustBalanceBtn'),
+    
+    // --- Ajuste de Saldo Inicial ---
     initialBalanceModal: document.getElementById('initialBalanceModal'),
     initialBalanceInput: document.getElementById('initialBalanceInput'),
-    cancelBalanceBtn: document.getElementById('cancelBalanceBtn'),
     saveBalanceBtn: document.getElementById('saveBalanceBtn'),
+    cancelBalanceBtn: document.getElementById('cancelBalanceBtn'),
 
-    // Modal Reset Senha
-    forgotPasswordModal: document.getElementById('forgotPasswordModal'),
-    resetEmailInput: document.getElementById('resetEmailInput'),
-    cancelResetBtn: document.getElementById('cancelResetBtn'),
-    sendResetEmailBtn: document.getElementById('sendResetEmailBtn'),
+    // --- Lista de Transações ---
+    addIncomeBtn: document.getElementById('addIncomeBtn'),
+    addExpenseBtn: document.getElementById('addExpenseBtn'),
+    transactionSearchInput: document.getElementById('transactionSearchInput'),
+    transactionsList: document.getElementById('transactionsList'),
+    topExpensesByCategory: document.getElementById('topExpensesByCategory'),
+    topIncomesByCategory: document.getElementById('topIncomesByCategory'),
 
-    // Modais de Sistema
-    idleModal: document.getElementById('idleModal'),
-    countdownTimer: document.getElementById('countdownTimer'),
-    stayLoggedInBtn: document.getElementById('stayLoggedInBtn'),
+    // --- Modal de Transação (CORREÇÃO v5.8.2) ---
+    transactionModal: document.getElementById('transactionModal'),
+    transactionModalTitle: document.getElementById('transactionModalTitle'),
+    transactionForm: document.getElementById('transactionForm'),
+    transactionId: document.getElementById('transactionId'),
+    transactionDate: document.getElementById('transactionDate'),
+    transactionDescription: document.getElementById('transactionDescription'),
+    transactionCategory: document.getElementById('transactionCategory'),
+    transactionSourceContainer: document.getElementById('transactionSourceContainer'),
+    transactionAmount: document.getElementById('transactionAmount'),
+    transactionType: document.getElementById('transactionType'),
+    cancelTransactionBtn: document.getElementById('cancelTransactionBtn'),
     
-    optionsModal: document.getElementById('optionsModal'),
-    optionsList: document.getElementById('optionsList'),
-    newOptionInput: document.getElementById('newOptionInput'),
-    addOptionBtn: document.getElementById('addOptionBtn'),
-    closeOptionsModalBtn: document.getElementById('closeOptionsModalBtn'),
+    // Campos adicionados na v5.8.1 - Se o HTML não tiver estes IDs, estas variáveis serão NULL
+    transactionStatusContainer: document.getElementById('transactionStatusContainer'),
+    pago: document.querySelector('input[name="transactionStatus"][value="pago"]'),
+    a_receber: document.querySelector('input[name="transactionStatus"][value="a_receber"]'),
 
-    cookieBanner: document.getElementById('cookieBanner'),
-    cookieAcceptBtn: document.getElementById('cookieAcceptBtn'),
+    // --- Modal de Quitação (Ponte) ---
+    settlementModal: document.getElementById('settlementModal'),
+    settlementOrderId: document.getElementById('settlementOrderId'),
+    settlementAmountDisplay: document.getElementById('settlementAmountDisplay'),
+    settlementDate: document.getElementById('settlementDate'),
+    settlementSourceContainer: document.getElementById('settlementSourceContainer'),
+    settlementCancelBtn: document.getElementById('settlementCancelBtn'),
+    settlementConfirmBtn: document.getElementById('settlementConfirmBtn'),
 
+    // --- Banner de Backup ---
     backupReminderBanner: document.getElementById('backupReminderBanner'),
-    dismissBackupReminderBtn: document.getElementById('dismissBackupReminderBtn'),
     backupNowBtn: document.getElementById('backupNowBtn'),
-
-    // =========================================================================
-    // 6. TEMPLATES & DATALISTS
-    // =========================================================================
-    partTemplate: document.getElementById('partTemplate'),
-    comumPartContentTemplate: document.getElementById('comumPartContentTemplate'),
-    detalhadoPartContentTemplate: document.getElementById('detalhadoPartContentTemplate'),
-    specificSizeRowTemplate: document.getElementById('specificSizeRowTemplate'),
-    financialRowTemplate: document.getElementById('financialRowTemplate'),
-    
-    partTypeList: document.getElementById('part-type-list'),
-    partMaterialList: document.getElementById('part-material-list'),
+    dismissBackupReminderBtn: document.getElementById('dismissBackupReminderBtn'),
 };
