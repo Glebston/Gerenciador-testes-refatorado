@@ -1,37 +1,27 @@
 // js/listeners/authListeners.js
 
 // Importações necessárias
-import { handleLogin, handleLogout, handleForgotPassword } from '../auth.js'; 
+// v5.7.22: REMOVIDA importação estática de UI.
+// import * as UI from '../ui.js'; 
+import { handleLogin, handleLogout, handleForgotPassword } from '../auth.js'; // Importa as funções de lógica de autenticação
 
 /**
- * Função utilitária para adicionar listeners com segurança (Cópia local para isolamento)
- */
-function safeListener(element, event, handler) {
-    if (element) {
-        element.addEventListener(event, handler);
-    }
-}
-
-/**
- * Inicializa todos os event listeners relacionados à autenticação.
+ * Inicializa todos os event listeners relacionados à autenticação (login, logout, etc.).
+ * Esta função é chamada uma vez no main.js para anexar os listeners.
+ * * v5.7.22: A função agora recebe o módulo 'UI' injetado pelo main.js
+ * para resolver o "conflito de módulo" (estático vs. dinâmico).
  */
 export function initializeAuthListeners(UI) {
     
     // Listener do formulário de login
-    // CORREÇÃO: Usando safeListener e os nomes corretos do DOM (Suffix Input)
-    safeListener(UI.DOM.loginForm, 'submit', (e) => { 
+    UI.DOM.loginForm.addEventListener('submit', (e) => { 
         e.preventDefault(); 
-        
-        // CORREÇÃO CRÍTICA: loginEmail -> loginEmailInput
-        const email = UI.DOM.loginEmailInput ? UI.DOM.loginEmailInput.value : '';
-        const password = UI.DOM.loginPasswordInput ? UI.DOM.loginPasswordInput.value : '';
-        
-        handleLogin(email, password); 
+        handleLogin(UI.DOM.loginEmail.value, UI.DOM.loginPassword.value); 
     });
 
     // Listener do botão "Esqueci minha senha"
-    safeListener(UI.DOM.forgotPasswordBtn, 'click', handleForgotPassword);
+    UI.DOM.forgotPasswordBtn.addEventListener('click', handleForgotPassword);
 
     // Listener do botão de logout
-    safeListener(UI.DOM.logoutBtn, 'click', handleLogout);
+    UI.DOM.logoutBtn.addEventListener('click', handleLogout);
 }
