@@ -110,7 +110,30 @@ export function initializeFinanceListeners(UI, deps) {
             return;
         }
         try {
-            await services.saveTransaction(data, UI.DOM.transactionId.value);
+            // --- INÍCIO DA NOVA LÓGICA: Sincronização de Taxas/Descontos ---
+            const transactionId = UI.DOM.transactionId.value;
+            
+            // Se estamos editando (tem ID) e se a função de update no pedido foi injetada
+            if (transactionId && services.getTransactionById && services.updateOrderDiscountFromFinance) {
+                // 1. Busca a versão original da transação (antes de salvar a nova)
+                const originalTransaction = services.getTransactionById(transactionId);
+
+                // 2. Verifica se ela está vinculada a um pedido
+                if (originalTransaction && originalTransaction.orderId) {
+                    const oldAmount = parseFloat(originalTransaction.amount) || 0;
+                    const newAmount = data.amount;
+                    const diff = newAmount - oldAmount;
+
+                    // 3. Se o valor mudou, atualiza o pedido correspondente
+                    // (Se diff for negativo, significa que recebeu menos -> aumenta desconto)
+                    if (Math.abs(diff) > 0.001) {
+                        await services.updateOrderDiscountFromFinance(originalTransaction.orderId, diff);
+                    }
+                }
+            }
+            // --- FIM DA NOVA LÓGICA ---
+
+            await services.saveTransaction(data, transactionId);
             
             // v5.7.6: Centralizado via modalHandler
             UI.hideTransactionModal();
