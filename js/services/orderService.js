@@ -119,7 +119,7 @@ export const getAllOrders = () => {
  */
 export const calculateTotalPendingRevenue = () => {
     return allOrders.reduce((acc, order) => {
-        // Ignora cancelados
+        // Ignora cancelados e entregues (geralmente entregue já foi pago, mas se quiser incluir entregues não pagos, remova a checagem de status)
         if (order.status === 'Cancelado') return acc;
 
         // 1. Calcula o Total Real (soma das peças - desconto)
