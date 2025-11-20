@@ -1,5 +1,5 @@
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.9 "Sincronia Total")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.10 "Sincronia Blindada")
 // ========================================================
 
 async function main() {
@@ -17,6 +17,7 @@ async function main() {
         const { db, auth } = await import(`./firebaseConfig.js${cacheBuster}`);
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
 
+        // Importa os serviços, incluindo as novas funções de cálculo e atualização
         const { 
             initializeOrderService, 
             saveOrder, 
@@ -100,6 +101,7 @@ async function main() {
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
+                // Calcula o pendente inicial (pode ser 0 se os dados ainda não chegaram, mas será corrigido pelo handleOrderChange)
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -178,17 +180,20 @@ async function main() {
             }
 
             // 2. ATUALIZAÇÃO CRÍTICA: Sincroniza o KPI Financeiro "A Receber"
-            // Sempre que um pedido muda (novo, editado, deletado), recalculamos o pendente.
+            // Sempre que um pedido é carregado ou alterado, recalculamos o valor pendente
+            // e atualizamos os KPIs financeiros. Isso resolve o problema do "Zero ao Carregar".
             if (calculateTotalPendingRevenue) {
                 const pendingRevenue = calculateTotalPendingRevenue();
-                // Usa as transações já carregadas em memória
                 const currentTransactions = getAllTransactions ? getAllTransactions() : [];
+                
+                // Só renderiza se o painel financeiro estiver visível ou se precisarmos atualizar os dados em background
+                // (Chamamos direto para garantir consistência)
                 UI.renderFinanceKPIs(currentTransactions, userBankBalanceConfig, pendingRevenue);
             }
         };
 
         const handleFinanceChange = (type, transaction, config) => {
-            // v5.7.9: Mantém o valor pendente atualizado ao mexer no financeiro
+            // Ao mexer no financeiro, também precisamos garantir que o valor pendente continue lá
             const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
             UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
             
@@ -416,7 +421,7 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
-        // v5.7.9: Injeção dos novos serviços para conectar Financeiro x Pedidos
+        // Injeção dos serviços necessários no Financeiro
         initializeFinanceListeners(UI, {
             services: {
                 saveTransaction,
@@ -430,9 +435,11 @@ async function main() {
             },
             getConfig: () => userBankBalanceConfig,
             setConfig: (newState) => {
+                // v5.7.10: Suporte para atualizar saldo inicial do Banco e do Caixa
                 if (newState.initialBalance !== undefined) {
                     userBankBalanceConfig.initialBalance = newState.initialBalance;
                 }
+                // (Futuro: aqui entra a atualização do saldo caixa)
             }
         });
 
