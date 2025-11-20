@@ -6,6 +6,20 @@ let dbCollection = null;
 let allOrders = [];
 let unsubscribeListener = null;
 
+// --- Função Auxiliar de Conversão (TENTATIVA DE CORREÇÃO ROBUSTA) ---
+const parseCurrency = (value) => {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    if (typeof value === 'string') {
+        // Remove R$, espaços e pontos de milhar, e troca vírgula por ponto
+        // Ex: "R$ 1.200,50" -> "1200.50" -> 1200.50
+        const cleanString = value.replace(/[R$\s.]/g, '').replace(',', '.');
+        const number = parseFloat(cleanString);
+        return isNaN(number) ? 0 : number;
+    }
+    return 0;
+};
+
 const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
     if (unsubscribeListener) unsubscribeListener();
 
@@ -28,7 +42,6 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
                 granularUpdateCallback(change.type, data, getViewCallback());
             }
         });
-        // DEBUG: Confirma quantos pedidos estão em cache após a atualização
         console.log(`[DEBUG OrderService] Cache atualizado. Total de pedidos: ${allOrders.length}`);
 
     }, (error) => {
@@ -65,48 +78,64 @@ export const getAllOrders = () => {
 };
 
 /**
- * Calcula o valor total pendente com logs de depuração
+ * Calcula o valor total pendente (Com Parser Robusto e Espião)
  */
 export const calculateTotalPendingRevenue = () => {
-    console.log("[DEBUG OrderService] Calculando Receita Pendente...");
-    const total = allOrders.reduce((acc, order) => {
+    // console.log("[DEBUG OrderService] Calculando Receita Pendente..."); // Comentado para limpar o console
+    
+    let debuggedOnce = false; // Flag para não poluir o console com 39 logs
+
+    const totalRevenue = allOrders.reduce((acc, order) => {
         if (order.status === 'Cancelado') return acc;
-        const t = parseFloat(order.total) || 0;
-        const p = parseFloat(order.amountPaid) || 0;
-        const remaining = t - p;
+
+        // --- ESPIÃO DE DADOS (Executa apenas no primeiro item) ---
+        if (!debuggedOnce && allOrders.length > 0) {
+            console.log("%c[DEBUG ESPIÃO] Analisando estrutura do pedido:", "color: orange; font-weight: bold;");
+            console.log("Objeto Pedido Completo:", order);
+            console.log(`Campo 'total': Valor="${order.total}" | Tipo=${typeof order.total}`);
+            console.log(`Campo 'amountPaid': Valor="${order.amountPaid}" | Tipo=${typeof order.amountPaid}`);
+            debuggedOnce = true;
+        }
+        // ---------------------------------------------------------
+
+        // Usa a função robusta em vez de parseFloat direto
+        const total = parseCurrency(order.total);
+        const paid = parseCurrency(order.amountPaid);
+        
+        const remaining = total - paid;
         return acc + (remaining > 0 ? remaining : 0);
     }, 0);
-    console.log(`[DEBUG OrderService] Total calculado: R$ ${total} (Baseado em ${allOrders.length} pedidos)`);
-    return total;
+
+    // Só mostra o log se o valor mudou ou na carga inicial, para não spammar
+    // console.log(`[DEBUG OrderService] Total calculado: R$ ${totalRevenue}`);
+    return totalRevenue;
 };
 
 /**
- * Atualiza desconto com logs de depuração
+ * Atualiza desconto (Com Parser Robusto)
  */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
-    console.log(`[DEBUG OrderService] Tentando atualizar desconto. OrderID: ${orderId}, Diff: ${diffValue}`);
     if (!orderId || !dbCollection) return;
 
     const orderRef = doc(dbCollection, orderId);
     const orderSnap = await getDoc(orderRef);
 
-    if (!orderSnap.exists()) {
-        console.error("[DEBUG OrderService] Pedido não encontrado no Firestore!");
-        return;
-    }
+    if (!orderSnap.exists()) return;
 
     const orderData = orderSnap.data();
-    const currentDiscount = parseFloat(orderData.discount) || 0;
-    const currentPaid = parseFloat(orderData.amountPaid) || 0;
+    
+    // Usa o parser robusto para ler os valores atuais do banco
+    const currentDiscount = parseCurrency(orderData.discount);
+    const currentPaid = parseCurrency(orderData.amountPaid);
+    
     const adjustment = diffValue * -1; 
 
-    console.log(`[DEBUG OrderService] Atualizando... Desc Antigo: ${currentDiscount}, Novo: ${currentDiscount + adjustment}`);
+    console.log(`[DEBUG OrderService] Atualizando Desconto. Atual: ${currentDiscount} + Ajuste: ${adjustment}`);
 
     await updateDoc(orderRef, {
         discount: currentDiscount + adjustment,
         amountPaid: currentPaid + diffValue
     });
-    console.log("[DEBUG OrderService] Pedido atualizado com sucesso.");
 };
 
 export const cleanupOrderService = () => {
