@@ -1,5 +1,11 @@
 // js/listeners/financeListeners.js
 
+/**
+ * Lida com a lógica de preenchimento do modal para editar uma transação.
+ * @param {object} UI - O módulo UI (injetado)
+ * @param {string} id - O ID da transação.
+ * @param {Function} getTransactions - A função getAllTransactions.
+ */
 function handleEditTransaction(UI, id, getTransactions) {
     const transaction = getTransactions().find(t => t.id === id);
     if (!transaction) return;
@@ -20,12 +26,20 @@ function handleEditTransaction(UI, id, getTransactions) {
     }
     
     UI.DOM.transactionModalTitle.textContent = isIncome ? 'Editar Entrada' : 'Editar Despesa';
+    
     UI.showTransactionModal();
 }
 
+/**
+ * Inicializa todos os event listeners relacionados ao Dashboard Financeiro.
+ * @param {object} UI - O módulo UI (injetado)
+ * @param {object} deps - Dependências injetadas
+ */
 export function initializeFinanceListeners(UI, deps) {
+
     const { services, getConfig, setConfig } = deps;
 
+    // --- Botões "Nova Entrada" / "Nova Despesa" ---
     UI.DOM.addIncomeBtn.addEventListener('click', () => { 
         UI.DOM.transactionForm.reset(); 
         UI.DOM.transactionId.value = ''; 
@@ -35,6 +49,7 @@ export function initializeFinanceListeners(UI, deps) {
         UI.DOM.transactionStatusContainer.classList.remove('hidden'); 
         UI.DOM.pago.checked = true; 
         UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
+        
         UI.showTransactionModal();
     });
 
@@ -46,13 +61,13 @@ export function initializeFinanceListeners(UI, deps) {
         UI.DOM.transactionDate.value = new Date().toISOString().split('T')[0]; 
         UI.DOM.transactionStatusContainer.classList.add('hidden'); 
         UI.updateSourceSelectionUI(UI.DOM.transactionSourceContainer, 'banco'); 
+        
         UI.showTransactionModal();
     });
 
+    // --- Formulário de Transação (Modal) ---
     UI.DOM.transactionForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log("[DEBUG FinanceListener] Submit acionado.");
-
         const selectedSourceEl = UI.DOM.transactionSourceContainer.querySelector('.source-selector.active');
         if (!selectedSourceEl) {
             UI.showInfoModal("Por favor, selecione a Origem (Banco ou Caixa).");
@@ -69,51 +84,46 @@ export function initializeFinanceListeners(UI, deps) {
                 ? (UI.DOM.a_receber.checked ? 'a_receber' : 'pago') 
                 : 'pago'
         };
-        
+        if (!data.date || !data.description || isNaN(data.amount) || data.amount <= 0) {
+            UI.showInfoModal("Por favor, preencha todos os campos com valores válidos.");
+            return;
+        }
         try {
             const transactionId = UI.DOM.transactionId.value;
             
-            // --- DEBUG DA NOVA LÓGICA ---
-            console.log(`[DEBUG FinanceListener] ID Transação: ${transactionId}`);
-            console.log(`[DEBUG FinanceListener] Serviços disponíveis:`, {
-                getTransactionById: !!services.getTransactionById,
-                updateOrder: !!services.updateOrderDiscountFromFinance
-            });
-
+            // LÓGICA DE SINCRONIZAÇÃO DE DESCONTO
+            // Se estamos editando e os serviços necessários existem
             if (transactionId && services.getTransactionById && services.updateOrderDiscountFromFinance) {
                 const originalTransaction = services.getTransactionById(transactionId);
-                console.log("[DEBUG FinanceListener] Transação Original:", originalTransaction);
 
+                // Verifica se tem vínculo com pedido
                 if (originalTransaction && originalTransaction.orderId) {
                     const oldAmount = parseFloat(originalTransaction.amount) || 0;
                     const newAmount = data.amount;
                     const diff = newAmount - oldAmount;
 
-                    console.log(`[DEBUG FinanceListener] Diferença calculada: ${diff} (Antigo: ${oldAmount}, Novo: ${newAmount})`);
-
+                    // Se o valor mudou significativamente, atualiza o pedido
                     if (Math.abs(diff) > 0.001) {
-                        console.log("[DEBUG FinanceListener] Chamando atualização do pedido...");
                         await services.updateOrderDiscountFromFinance(originalTransaction.orderId, diff);
-                    } else {
-                        console.log("[DEBUG FinanceListener] Sem diferença de valor, pulando atualização do pedido.");
                     }
-                } else {
-                    console.log("[DEBUG FinanceListener] Transação não tem orderId vinculado.");
                 }
             }
-            // --- FIM DEBUG ---
 
             await services.saveTransaction(data, transactionId);
+            
             UI.hideTransactionModal();
 
         } catch (error) {
             console.error("Erro ao salvar transação:", error);
-            UI.showInfoModal("Não foi possível salvar o lançamento.");
+            UI.showInfoModal("Não foi possível salvar o lançamento. Verifique sua conexão e tente novamente.");
         }
     });
 
-    UI.DOM.cancelTransactionBtn.addEventListener('click', () => UI.hideTransactionModal());
+    UI.DOM.cancelTransactionBtn.addEventListener('click', () => {
+        UI.hideTransactionModal();
+    });
 
+    // --- Lista de Transações (Edição, Exclusão, Marcar como Pago) ---
     UI.DOM.transactionsList.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         if (!btn || !btn.dataset.id) return;
@@ -129,11 +139,10 @@ export function initializeFinanceListeners(UI, deps) {
         }
     });
 
+    // --- Filtros do Dashboard Financeiro ---
     const renderFullDashboard = () => {
-        // Debug para ver se o cálculo está sendo chamado na renderização
+        // Busca o valor atualizado das pendências de pedidos (se a função existir)
         const pendingRevenue = services.calculateTotalPendingRevenue ? services.calculateTotalPendingRevenue() : 0;
-        console.log(`[DEBUG FinanceListener] Renderizando Dashboard. A Receber (Pedidos): ${pendingRevenue}`);
-        
         UI.renderFinanceDashboard(services.getAllTransactions(), getConfig(), pendingRevenue);
     };
 
@@ -146,6 +155,7 @@ export function initializeFinanceListeners(UI, deps) {
         if(element) element.addEventListener('input', renderFullDashboard);
     });
 
+    // --- Ajuste de Saldo ---
     UI.DOM.adjustBalanceBtn.addEventListener('click', () => {
         UI.DOM.initialBalanceInput.value = (getConfig().initialBalance || 0).toFixed(2);
         UI.DOM.initialBalanceModal.classList.remove('hidden');
@@ -158,11 +168,13 @@ export function initializeFinanceListeners(UI, deps) {
             return;
         }
         await services.saveInitialBalance(newBalance);
-        setConfig({ initialBalance: newBalance }); 
-        renderFullDashboard(); 
+        setConfig({ initialBalance: newBalance }); // Atualiza o estado local no main.js
+        
+        renderFullDashboard(); // Renderiza KPIs e lista, pois o saldo em conta mudou
         UI.DOM.initialBalanceModal.classList.add('hidden');
     });
 
+    // --- Seletor de Fonte (Banco/Caixa) no Modal de Transação ---
     UI.DOM.transactionSourceContainer.addEventListener('click', (e) => {
         const target = e.target.closest('.source-selector');
         if (target) {
