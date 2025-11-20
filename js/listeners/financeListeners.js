@@ -178,7 +178,14 @@ export function initializeFinanceListeners(UI, deps) {
     });
 
     // --- Filtros do Dashboard Financeiro ---
-    const renderFullDashboard = () => UI.renderFinanceDashboard(services.getAllTransactions(), getConfig());
+    
+    // v4.5.1: ATUALIZADO - Agora busca o valor pendente dos pedidos (se disponível)
+    const renderFullDashboard = () => {
+        // Verifica se a função existe (para evitar crash se o main.js não passar o serviço)
+        const pendingRevenue = services.calculateTotalPendingRevenue ? services.calculateTotalPendingRevenue() : 0;
+        
+        UI.renderFinanceDashboard(services.getAllTransactions(), getConfig(), pendingRevenue);
+    };
 
     UI.DOM.periodFilter.addEventListener('change', () => { 
         UI.DOM.customPeriodContainer.classList.toggle('hidden', UI.DOM.periodFilter.value !== 'custom'); 
