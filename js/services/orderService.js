@@ -6,13 +6,11 @@ let dbCollection = null;
 let allOrders = [];
 let unsubscribeListener = null;
 
-// --- Função Auxiliar de Conversão (TENTATIVA DE CORREÇÃO ROBUSTA) ---
+// --- Função Auxiliar de Conversão ---
 const parseCurrency = (value) => {
     if (typeof value === 'number') return value;
     if (!value) return 0;
     if (typeof value === 'string') {
-        // Remove R$, espaços e pontos de milhar, e troca vírgula por ponto
-        // Ex: "R$ 1.200,50" -> "1200.50" -> 1200.50
         const cleanString = value.replace(/[R$\s.]/g, '').replace(',', '.');
         const number = parseFloat(cleanString);
         return isNaN(number) ? 0 : number;
@@ -78,41 +76,38 @@ export const getAllOrders = () => {
 };
 
 /**
- * Calcula o valor total pendente (Com Parser Robusto e Espião)
+ * Calcula o valor total pendente (COM RAIO-X DE ESTRUTURA)
  */
 export const calculateTotalPendingRevenue = () => {
-    // console.log("[DEBUG OrderService] Calculando Receita Pendente..."); // Comentado para limpar o console
-    
-    let debuggedOnce = false; // Flag para não poluir o console com 39 logs
+    let debuggedOnce = false;
 
     const totalRevenue = allOrders.reduce((acc, order) => {
         if (order.status === 'Cancelado') return acc;
 
-        // --- ESPIÃO DE DADOS (Executa apenas no primeiro item) ---
+        // --- SUPER ESPIÃO (RAIO-X) ---
+        // Executa apenas no primeiro pedido válido encontrado para não travar seu navegador
         if (!debuggedOnce && allOrders.length > 0) {
-            console.log("%c[DEBUG ESPIÃO] Analisando estrutura do pedido:", "color: orange; font-weight: bold;");
-            console.log("Objeto Pedido Completo:", order);
-            console.log(`Campo 'total': Valor="${order.total}" | Tipo=${typeof order.total}`);
-            console.log(`Campo 'amountPaid': Valor="${order.amountPaid}" | Tipo=${typeof order.amountPaid}`);
+            console.group("%c[DEBUG RAIO-X] ESTRUTURA DO PEDIDO", "color: red; font-size: 14px; font-weight: bold;");
+            console.log("1. Quais chaves existem neste pedido?", Object.keys(order));
+            console.log("2. Conteúdo completo (JSON):", JSON.stringify(order, null, 2));
+            console.groupEnd();
             debuggedOnce = true;
         }
-        // ---------------------------------------------------------
+        // -----------------------------
 
-        // Usa a função robusta em vez de parseFloat direto
-        const total = parseCurrency(order.total);
+        // Tenta ler com os nomes padrão (vai falhar se os nomes forem outros, mas o Raio-X vai nos contar)
+        const total = parseCurrency(order.total); 
         const paid = parseCurrency(order.amountPaid);
         
         const remaining = total - paid;
         return acc + (remaining > 0 ? remaining : 0);
     }, 0);
 
-    // Só mostra o log se o valor mudou ou na carga inicial, para não spammar
-    // console.log(`[DEBUG OrderService] Total calculado: R$ ${totalRevenue}`);
     return totalRevenue;
 };
 
 /**
- * Atualiza desconto (Com Parser Robusto)
+ * Atualiza desconto (Com parser seguro)
  */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
@@ -123,14 +118,12 @@ export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderSnap.exists()) return;
 
     const orderData = orderSnap.data();
-    
-    // Usa o parser robusto para ler os valores atuais do banco
     const currentDiscount = parseCurrency(orderData.discount);
     const currentPaid = parseCurrency(orderData.amountPaid);
     
     const adjustment = diffValue * -1; 
 
-    console.log(`[DEBUG OrderService] Atualizando Desconto. Atual: ${currentDiscount} + Ajuste: ${adjustment}`);
+    console.log(`[DEBUG OrderService] Atualizando Desconto. Ajuste: ${adjustment}`);
 
     await updateDoc(orderRef, {
         discount: currentDiscount + adjustment,
