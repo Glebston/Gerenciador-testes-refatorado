@@ -9,19 +9,16 @@ let dbCollection = null;
 let allOrders = [];           
 let unsubscribeListener = null; 
 
-// --- Funções Auxiliares de Cálculo (A MÁGICA ACONTECE AQUI) ---
+// --- Funções Auxiliares de Cálculo ---
 
 /**
  * Conta a quantidade total de itens dentro da estrutura complexa de tamanhos.
- * Ex: { "Normal": { "P": 2 }, "Infantil": { "10": 1 } } -> Total 3
  */
 const countPartItems = (part) => {
     let totalQty = 0;
     if (part.sizes && typeof part.sizes === 'object') {
-        // Itera sobre as categorias (Normal, Baby Look, etc)
         Object.values(part.sizes).forEach(sizesObj => {
             if (sizesObj && typeof sizesObj === 'object') {
-                // Itera sobre os tamanhos (P, M, G...) e soma as quantidades
                 Object.values(sizesObj).forEach(qty => {
                     totalQty += (parseInt(qty) || 0);
                 });
@@ -39,7 +36,6 @@ const calculateOrderTotalValue = (order) => {
 
     if (order.parts && Array.isArray(order.parts)) {
         order.parts.forEach(part => {
-            // Define o preço: Se tiver preço específico usa ele, senão usa o padrão
             const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || 0;
             const qty = countPartItems(part);
             grossTotal += (price * qty);
@@ -54,7 +50,7 @@ const calculateOrderTotalValue = (order) => {
 // --- Funções Privadas do Firestore ---
 
 const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
-    if (unsubscribeListener) unsubscribeListener(); // Garante que não haja listeners duplicados
+    if (unsubscribeListener) unsubscribeListener(); 
 
     const q = query(dbCollection);
     unsubscribeListener = onSnapshot(q, (snapshot) => {
@@ -114,31 +110,33 @@ export const getAllOrders = () => {
 };
 
 /**
- * Calcula o valor total pendente (A Receber) CORRIGIDO.
- * Usa a estrutura real do banco: Calculando peças e lendo 'downPayment'.
+ * Calcula o valor total pendente (A Receber).
+ * Lógica Ajustada: Ignora pedidos Cancelados E pedidos Entregues.
  */
 export const calculateTotalPendingRevenue = () => {
     return allOrders.reduce((acc, order) => {
-        // Ignora cancelados e entregues (geralmente entregue já foi pago, mas se quiser incluir entregues não pagos, remova a checagem de status)
-        if (order.status === 'Cancelado') return acc;
+        // Verifica o status usando a propriedade correta 'orderStatus'
+        const status = order.orderStatus || '';
+        
+        // Se estiver Cancelado ou Entregue, não conta como receita pendente
+        if (status === 'Cancelado' || status === 'Entregue') return acc;
 
-        // 1. Calcula o Total Real (soma das peças - desconto)
+        // 1. Calcula o Total Real
         const total = calculateOrderTotalValue(order);
 
-        // 2. Lê o valor pago (campo 'downPayment')
+        // 2. Lê o valor pago
         const paid = parseFloat(order.downPayment) || 0;
 
         // 3. Saldo Devedor
         const remaining = total - paid;
 
-        // Só soma se houver valor positivo restante (evita negativos se pagou a mais)
+        // Só soma se houver valor positivo restante
         return acc + (remaining > 0 ? remaining : 0);
     }, 0);
 };
 
 /**
- * Atualiza o desconto e o valor pago no pedido CORRIGIDO.
- * Atualiza 'downPayment' em vez de 'amountPaid'.
+ * Atualiza o desconto e o valor pago no pedido.
  */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
@@ -150,16 +148,14 @@ export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
 
     const orderData = orderSnap.data();
     
-    // Lê os valores atuais corretos
     const currentDiscount = parseFloat(orderData.discount) || 0;
-    const currentPaid = parseFloat(orderData.downPayment) || 0; // <--- CORREÇÃO: downPayment
+    const currentPaid = parseFloat(orderData.downPayment) || 0;
 
-    // Se diffValue é negativo (diminuiu recebimento), aumenta desconto.
     const adjustment = diffValue * -1; 
 
     await updateDoc(orderRef, {
         discount: currentDiscount + adjustment,
-        downPayment: currentPaid + diffValue // <--- CORREÇÃO: Atualiza downPayment
+        downPayment: currentPaid + diffValue 
     });
 };
 
