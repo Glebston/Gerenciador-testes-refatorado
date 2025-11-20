@@ -1,5 +1,5 @@
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v4.3.0)
+// MÓDULO FINANCE RENDERER (v4.5.1)
 // Responsabilidade: Gerenciar a renderização de tudo 
 // relacionado ao Dashboard Financeiro: KPIs, Gráficos e 
 // a lista de transações.
@@ -127,8 +127,9 @@ const showTransactionsPlaceholder = (isSearch) => {
 
 /**
  * Renderiza apenas os KPIs (cards superiores) do dashboard financeiro
+ * v4.5.1: Adicionado parâmetro opcional 'pendingOrdersValue' para somar ao A Receber.
  */
-export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig) => {
+export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     const filterValue = DOM.periodFilter.value;
     const now = new Date();
     let startDate, endDate;
@@ -193,6 +194,11 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig) => {
         }
     });
 
+    // v4.5.1: Soma o valor pendente dos pedidos ao KPI de Contas a Receber
+    // Nota: Só somamos isso se o filtro não for específico (ou se a lógica de negócio permitir).
+    // Por padrão, somamos ao total geral do período visualizado.
+    contasARReceber += (parseFloat(pendingOrdersValue) || 0);
+
     const lucroLiquido = valorRecebido - despesasTotais;
     // Saldo em Conta (Banco) = Saldo Inicial + Fluxo do Banco
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
@@ -252,12 +258,13 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig) => {
 
 /**
  * Função principal de renderização do dashboard financeiro (para carga inicial ou filtros)
+ * v4.5.1: Adicionado parâmetro opcional 'pendingOrdersValue'.
  */
-export const renderFinanceDashboard = (allTransactions, userBankBalanceConfig) => {
+export const renderFinanceDashboard = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     if (!DOM.periodFilter) return;
 
     // 1. Renderiza os KPIs e obtém as transações filtradas
-    const filteredTransactions = renderFinanceKPIs(allTransactions, userBankBalanceConfig);
+    const filteredTransactions = renderFinanceKPIs(allTransactions, userBankBalanceConfig, pendingOrdersValue);
 
     // 2. Filtra por busca
     const searchTerm = DOM.transactionSearchInput.value.toLowerCase();
