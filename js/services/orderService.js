@@ -1,5 +1,5 @@
 // Importa as funções necessárias do Firestore
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Importa a instância 'db' do nosso arquivo de configuração
 import { db } from '../firebaseConfig.js';
@@ -115,6 +115,63 @@ export const getOrderById = (id) => {
  */
 export const getAllOrders = () => {
     return [...allOrders]; // Retorna cópia
+};
+
+/**
+ * Calcula o valor total pendente (A Receber) de todos os pedidos ativos.
+ * Usado para alimentar o KPI "A Receber (Pendentes)" no Dashboard Financeiro.
+ * @returns {number} Soma dos valores restantes.
+ */
+export const calculateTotalPendingRevenue = () => {
+    return allOrders.reduce((acc, order) => {
+        // Ignora pedidos cancelados ou deletados logicamente
+        if (order.status === 'Cancelado') return acc;
+
+        const total = parseFloat(order.total) || 0;
+        const paid = parseFloat(order.amountPaid) || 0;
+        const remaining = total - paid;
+
+        // Só soma se houver valor positivo restante
+        return acc + (remaining > 0 ? remaining : 0);
+    }, 0);
+};
+
+/**
+ * Atualiza o desconto e o valor pago de um pedido baseado em ajuste financeiro.
+ * Usado quando uma transação é editada no extrato (ex: taxa de cartão).
+ * @param {string} orderId - ID do pedido.
+ * @param {number} diffValue - Diferença de valor (Novo - Antigo). Se negativo, aumentou a taxa/desconto.
+ */
+export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
+    if (!orderId || !dbCollection) return;
+
+    const orderRef = doc(dbCollection, orderId);
+    const orderSnap = await getDoc(orderRef);
+
+    if (!orderSnap.exists()) return;
+
+    const orderData = orderSnap.data();
+    const currentDiscount = parseFloat(orderData.discount) || 0;
+    const currentPaid = parseFloat(orderData.amountPaid) || 0;
+
+    // Lógica de Negócio:
+    // Se o usuário REDUZIU o valor recebido na transação (diffValue negativo),
+    // isso significa que houve uma taxa. O desconto do pedido deve AUMENTAR.
+    // E o valor contabilizado como "Pago" no pedido deve DIMINUIR.
+    
+    // Exemplo: Pedido 100. Pago 100.
+    // Usuário edita transação para 95 (diff = -5).
+    // Novo Desconto = 0 + 5 = 5.
+    // Novo Pago = 100 - 5 = 95.
+    // Novo Saldo = 100 - 5(desc) - 95(pago) = 0. (Mantém balanceado)
+
+    // Invertemos o diffValue para somar ao desconto (se diff for -5, taxa é 5)
+    const adjustment = diffValue * -1; 
+
+    await updateDoc(orderRef, {
+        discount: currentDiscount + adjustment,
+        amountPaid: currentPaid + diffValue
+    });
 };
 
 /**
