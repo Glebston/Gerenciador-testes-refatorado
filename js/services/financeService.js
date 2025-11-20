@@ -193,6 +193,16 @@ export const deleteAllTransactionsByOrderId = async (orderId) => {
 };
 
 /**
+ * Busca uma única transação no cache local pelo seu ID.
+ * Necessário para comparar valores antes de salvar edições.
+ * @param {string} id - O ID da transação.
+ * @returns {object|undefined}
+ */
+export const getTransactionById = (id) => {
+    return allTransactions.find(t => t.id === id);
+};
+
+/**
  * Retorna uma cópia da lista completa de todas as transações do cache local.
  * @returns {Array}
  */
