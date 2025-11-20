@@ -1,5 +1,5 @@
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.7 "Bomba Atômica")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.8 "Conexão Total")
 // ========================================================
 
 // Esta função 'main' assíncrona agora envolve todo o aplicativo.
@@ -30,7 +30,19 @@ async function main() {
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
 
         // Módulos de Serviços de Negócio
-        const { initializeOrderService, saveOrder, deleteOrder, getOrderById, getAllOrders, cleanupOrderService } = await import(`./services/orderService.js${cacheBuster}`);
+        // v5.7.8: Adicionadas as novas funções 'calculateTotalPendingRevenue' e 'updateOrderDiscountFromFinance'
+        const { 
+            initializeOrderService, 
+            saveOrder, 
+            deleteOrder, 
+            getOrderById, 
+            getAllOrders, 
+            cleanupOrderService,
+            calculateTotalPendingRevenue,   // <--- NOVO
+            updateOrderDiscountFromFinance  // <--- NOVO
+        } = await import(`./services/orderService.js${cacheBuster}`);
+        
+        // v5.7.8: Adicionada a nova função 'getTransactionById'
         const { 
             initializeFinanceService, 
             saveTransaction, 
@@ -40,21 +52,19 @@ async function main() {
             getAllTransactions, 
             cleanupFinanceService, 
             getTransactionByOrderId,
-            deleteAllTransactionsByOrderId 
+            deleteAllTransactionsByOrderId,
+            getTransactionById              // <--- NOVO
         } = await import(`./services/financeService.js${cacheBuster}`);
+        
         const { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } = await import(`./services/pricingService.js${cacheBuster}`);
 
         // Módulo de Utilitários
         const { initializeIdleTimer } = await import(`./utils.js${cacheBuster}`);
 
         // Módulo de Interface do Usuário (UI)
-        // Carrega o "Arquivo-Barril" (ui.js). 
-        // O import() dinâmico de um barril retorna o namespace (como o 'UI' que usávamos).
         const UI = await import(`./ui.js${cacheBuster}`);
 
         // Módulos de Listeners
-        // v5.7.22: Todos os listeners agora são carregados dinamicamente
-        // e receberão a 'UI' por injeção.
         const { initializeAuthListeners } = await import(`./listeners/authListeners.js${cacheBuster}`);
         const { initializeNavigationListeners } = await import(`./listeners/navigationListeners.js${cacheBuster}`);
         const { initializeOrderListeners } = await import(`./listeners/orderListeners.js${cacheBuster}`);
@@ -65,7 +75,6 @@ async function main() {
         // ========================================================
         // PARTE 2: ESTADO GLOBAL E CONFIGURAÇÕES DA APLICAÇÃO
         // ========================================================
-        // (Sem alterações lógicas nesta seção)
 
         let userCompanyId = null;
         let userCompanyName = null;
@@ -74,7 +83,7 @@ async function main() {
         let currentDashboardView = 'orders';
         let currentOrdersView = 'pending';
         let partCounter = 0;
-        let currentOptionType = ''; // Para o modal de gerenciamento de opções
+        let currentOptionType = ''; 
 
         const defaultOptions = {
             partTypes: ['Gola redonda manga curta', 'Gola redonda manga longa', 'Gola redonda manga longa com capuz', 'Gola redonda manga curta (sublimada na frente)', 'Gola polo manga curta', 'Gola polo manga longa', 'Gola V manga curta', 'Gola V manga longa', 'Short', 'Calça'],
@@ -105,35 +114,28 @@ async function main() {
                 }
                 UI.DOM.userEmail.textContent = userCompanyName;
                 
-                // --- INICIALIZAÇÃO REATIVA (PÓS-REATORAÇÃO) ---
+                // --- INICIALIZAÇÃO REATIVA ---
                 initializeOrderService(userCompanyId, handleOrderChange, () => currentOrdersView);
                 initializeFinanceService(userCompanyId, handleFinanceChange, () => userBankBalanceConfig);
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
-                // --- RENDERIZAÇÃO INICIAL (PESADA) ---
+                // --- RENDERIZAÇÃO INICIAL ---
+                // v5.7.8: Passamos o valor pendente para a renderização inicial também
+                const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
                 UI.renderOrders(getAllOrders(), currentOrdersView);
-                UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig);
+                UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
                 
                 // --- INICIALIZAÇÃO DE LÓGICA E UI AUXILIAR ---
                 initializeIdleTimer(UI.DOM, handleLogout);
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
-                // --- TORNAR APP VISÍVEL (PIPELINE SINCRONIZADO v5.7.42) ---
-                // Usa setTimeout + Double rAF para garantir que o DOM esteja
-                // pintado e estável antes de disparar o checkBackupReminder.
-
+                // --- TORNAR APP VISÍVEL ---
                 setTimeout(() => {
-                    // 1. Oculta o Login e Remove o hidden do App, permitindo que o navegador comece a calcular o layout
-                    UI.DOM.authContainer.classList.add('hidden'); // <--- CORREÇÃO AQUI
+                    UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
-
-                    // 2. Primeiro rAF: Espera o navegador agendar a próxima pintura
                     requestAnimationFrame(() => {
-                        // 3. Segundo rAF: Garante que a pintura anterior foi concluída
-                        // e o layout está 100% estável (Render Queue limpa).
                         requestAnimationFrame(() => {
-                            // 4. Agora é seguro manipular a animação do banner
                             checkBackupReminder();
                         });
                     });
@@ -158,8 +160,6 @@ async function main() {
             userBankBalanceConfig = { initialBalance: 0 };
         };
 
-        // PONTO DE ENTRADA PRINCIPAL (MOVIMENTADO)
-        // Agora é chamado *dentro* do 'main', após os imports.
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 initializeAppLogic(user);
@@ -172,7 +172,6 @@ async function main() {
         // ========================================================
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
-        // (Sem alterações lógicas nesta seção)
 
         const handleOrderChange = (type, order, viewType) => {
             const isDelivered = order.orderStatus === 'Entregue';
@@ -204,7 +203,9 @@ async function main() {
         };
 
         const handleFinanceChange = (type, transaction, config) => {
-            UI.renderFinanceKPIs(getAllTransactions(), config);
+            // v5.7.8: Injetamos o valor pendente também na atualização reativa
+            const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
+            UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
             
             const filter = UI.DOM.periodFilter.value;
             const now = new Date();
@@ -214,7 +215,6 @@ async function main() {
                 startDate = UI.DOM.startDateInput.value ? new Date(UI.DOM.startDateInput.value + 'T00:00:00') : null;
                 endDate = UI.DOM.endDateInput.value ? new Date(UI.DOM.endDateInput.value + 'T23:59:59') : null;
             } else {
-                // Lógica de filtro de data padrão (thisMonth, lastMonth, thisYear)
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
                 const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -264,8 +264,7 @@ async function main() {
         // ========================================================
         // PARTE 5: FUNÇÕES DE LÓGICA TRANSVERSAL (Cross-Cutting)
         // ========================================================
-        // (Sem alterações lógicas nesta seção)
-
+        
         const getOptionsFromStorage = (type) => {
             const stored = localStorage.getItem(`${userCompanyId}_${type}`);
             return stored ? JSON.parse(stored) : defaultOptions[type];
@@ -354,7 +353,6 @@ async function main() {
         };
 
         const triggerAutoBackupIfNeeded = () => {
-            // (Função preservada para referência futura, mas não chamada diretamente nesta versão)
             const key = `lastAutoBackupTimestamp_${userCompanyId}`;
             const lastBackup = localStorage.getItem(key);
             if (!lastBackup) return;
@@ -365,12 +363,6 @@ async function main() {
             }
         };
 
-        // ========================================================
-        // CORREÇÃO v5.7.50: LÓGICA DEFINITIVA DO BANNER
-        // ========================================================
-        // Substitui completamente as tentativas anteriores (v5.7.38/41).
-        // Funciona em harmonia com o Pipeline Sincronizado (rAF) da initializeAppLogic.
-        
         const checkBackupReminder = () => {
             const key = `lastAutoBackupTimestamp_${userCompanyId}`;
             const lastBackup = localStorage.getItem(key);
@@ -388,32 +380,17 @@ async function main() {
 
             if (needsReminder) {
                 const banner = UI.DOM.backupReminderBanner;
-
-                // Passo 1: Estado Inicial
-                // Removemos .hidden para que o elemento exista no layout.
-                // Removemos .toast-enter para garantir que ele comece "sem animação".
                 banner.classList.remove('hidden');
                 banner.classList.remove('toast-enter');
-
-                // Passo 2: Forçar Reflow (Cálculo de Layout)
-                // Ao ler o offsetWidth, obrigamos o navegador a processar o estado atual
-                // (visível, mas sem a classe de animação) ANTES de prosseguir.
                 void banner.offsetWidth;
-
-                // Passo 3: Disparar Animação
-                // Agora que o layout base está calculado, adicionamos a classe.
-                // A transição CSS vai ocorrer suavemente.
                 banner.classList.add('toast-enter');
             }
         };
 
+
         // ========================================================
         // PARTE 6: INICIALIZAÇÃO DOS EVENT LISTENERS
         // ========================================================
-        // (v5.7.22: Correção do Conflito de Módulo "Unificação")
-
-        // Delega a anexação de todos os event listeners para módulos especialistas,
-        // injetando as dependências necessárias (handlers, serviços e estado).
         
         initializeAuthListeners(UI);
 
@@ -454,13 +431,18 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
+        // v5.7.8: Injeção dos novos serviços para conectar Financeiro x Pedidos
         initializeFinanceListeners(UI, {
             services: {
                 saveTransaction,
                 deleteTransaction,
                 markTransactionAsPaid,
                 getAllTransactions,
-                saveInitialBalance
+                saveInitialBalance,
+                // NOVAS INJEÇÕES:
+                getTransactionById,              // Para achar o valor antigo
+                calculateTotalPendingRevenue,    // Para o KPI
+                updateOrderDiscountFromFinance   // Para aplicar o desconto
             },
             getConfig: () => userBankBalanceConfig,
             setConfig: (newState) => {
@@ -485,7 +467,6 @@ async function main() {
 
     } catch (error) {
         console.error("Falha crítica ao inicializar o PagLucro Gestor:", error);
-        // v5.7.7: Exibe um erro amigável se os módulos falharem ao carregar.
         document.body.innerHTML = `
             <div style="padding: 20px; text-align: center; font-family: sans-serif;">
                 <h1 style="color: #D90000;">Erro Crítico de Inicialização</h1>
@@ -499,8 +480,6 @@ async function main() {
 }
 
 // ========================================================
-// PARTE 7: PONTO DE ENTRADA DA APLICAÇÃO (v5.7.7)
+// PARTE 7: PONTO DE ENTRADA DA APLICAÇÃO
 // ========================================================
-// Inicia a função 'main' para carregar dinamicamente 
-// todos os módulos e iniciar a aplicação.
 main();
