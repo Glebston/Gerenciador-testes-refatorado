@@ -1,17 +1,9 @@
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.8 "Conexão Total")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.9 "Sincronia Total")
 // ========================================================
-
-// Esta função 'main' assíncrona agora envolve todo o aplicativo.
-// Isso nos permite usar 'await import()' para carregar dinamicamente
-// todos os módulos com um cache-buster de timestamp,
-// derrotando o cache agressivo do proxy/CDN.
 
 async function main() {
     
-    // 1. Gerar o cache-buster.
-    // Este é o 'v=timestamp' usado para forçar o recarregamento
-    // de todos os módulos dependentes.
     const cacheBuster = `?v=${new Date().getTime()}`;
 
     try {
@@ -19,18 +11,12 @@ async function main() {
         // PARTE 1.A: IMPORTAÇÕES DINÂMICAS DE MÓCULOS
         // ========================================================
 
-        // Firebase Core (externo, não precisa de cache-buster local)
         const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
         const { doc, getDoc, writeBatch, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
         
-        // Configuração do Firebase (local, precisa de cache-buster)
         const { db, auth } = await import(`./firebaseConfig.js${cacheBuster}`);
-
-        // Módulo de Autenticação
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
 
-        // Módulos de Serviços de Negócio
-        // v5.7.8: Adicionadas as novas funções 'calculateTotalPendingRevenue' e 'updateOrderDiscountFromFinance'
         const { 
             initializeOrderService, 
             saveOrder, 
@@ -38,11 +24,10 @@ async function main() {
             getOrderById, 
             getAllOrders, 
             cleanupOrderService,
-            calculateTotalPendingRevenue,   // <--- NOVO
-            updateOrderDiscountFromFinance  // <--- NOVO
+            calculateTotalPendingRevenue,   
+            updateOrderDiscountFromFinance  
         } = await import(`./services/orderService.js${cacheBuster}`);
         
-        // v5.7.8: Adicionada a nova função 'getTransactionById'
         const { 
             initializeFinanceService, 
             saveTransaction, 
@@ -53,18 +38,13 @@ async function main() {
             cleanupFinanceService, 
             getTransactionByOrderId,
             deleteAllTransactionsByOrderId,
-            getTransactionById              // <--- NOVO
+            getTransactionById              
         } = await import(`./services/financeService.js${cacheBuster}`);
         
         const { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } = await import(`./services/pricingService.js${cacheBuster}`);
-
-        // Módulo de Utilitários
         const { initializeIdleTimer } = await import(`./utils.js${cacheBuster}`);
-
-        // Módulo de Interface do Usuário (UI)
         const UI = await import(`./ui.js${cacheBuster}`);
 
-        // Módulos de Listeners
         const { initializeAuthListeners } = await import(`./listeners/authListeners.js${cacheBuster}`);
         const { initializeNavigationListeners } = await import(`./listeners/navigationListeners.js${cacheBuster}`);
         const { initializeOrderListeners } = await import(`./listeners/orderListeners.js${cacheBuster}`);
@@ -120,17 +100,14 @@ async function main() {
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
-                // v5.7.8: Passamos o valor pendente para a renderização inicial também
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
                 
-                // --- INICIALIZAÇÃO DE LÓGICA E UI AUXILIAR ---
                 initializeIdleTimer(UI.DOM, handleLogout);
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
-                // --- TORNAR APP VISÍVEL ---
                 setTimeout(() => {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
@@ -174,12 +151,12 @@ async function main() {
         // ========================================================
 
         const handleOrderChange = (type, order, viewType) => {
+            // 1. Atualiza a UI de Pedidos (Kanban)
             const isDelivered = order.orderStatus === 'Entregue';
 
             if (viewType === 'pending') {
                 if (isDelivered) {
                     UI.removeOrderCard(order.id);
-                    return; 
                 } else {
                     switch (type) {
                         case 'added': UI.addOrderCard(order, viewType); break;
@@ -191,7 +168,6 @@ async function main() {
             else if (viewType === 'delivered') {
                 if (!isDelivered) {
                     UI.removeOrderCard(order.id);
-                    return; 
                 } else {
                     switch (type) {
                         case 'added': UI.addOrderCard(order, viewType); break;
@@ -200,10 +176,19 @@ async function main() {
                     }
                 }
             }
+
+            // 2. ATUALIZAÇÃO CRÍTICA: Sincroniza o KPI Financeiro "A Receber"
+            // Sempre que um pedido muda (novo, editado, deletado), recalculamos o pendente.
+            if (calculateTotalPendingRevenue) {
+                const pendingRevenue = calculateTotalPendingRevenue();
+                // Usa as transações já carregadas em memória
+                const currentTransactions = getAllTransactions ? getAllTransactions() : [];
+                UI.renderFinanceKPIs(currentTransactions, userBankBalanceConfig, pendingRevenue);
+            }
         };
 
         const handleFinanceChange = (type, transaction, config) => {
-            // v5.7.8: Injetamos o valor pendente também na atualização reativa
+            // v5.7.9: Mantém o valor pendente atualizado ao mexer no financeiro
             const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
             UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
             
@@ -431,7 +416,7 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
-        // v5.7.8: Injeção dos novos serviços para conectar Financeiro x Pedidos
+        // v5.7.9: Injeção dos novos serviços para conectar Financeiro x Pedidos
         initializeFinanceListeners(UI, {
             services: {
                 saveTransaction,
@@ -439,10 +424,9 @@ async function main() {
                 markTransactionAsPaid,
                 getAllTransactions,
                 saveInitialBalance,
-                // NOVAS INJEÇÕES:
-                getTransactionById,              // Para achar o valor antigo
-                calculateTotalPendingRevenue,    // Para o KPI
-                updateOrderDiscountFromFinance   // Para aplicar o desconto
+                getTransactionById,              
+                calculateTotalPendingRevenue,    
+                updateOrderDiscountFromFinance   
             },
             getConfig: () => userBankBalanceConfig,
             setConfig: (newState) => {
