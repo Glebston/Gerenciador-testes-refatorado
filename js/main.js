@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.11 "Correção de Sincronia de Datas")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.12 - Default Date Fix)
 // ========================================================
 
 async function main() {
@@ -18,7 +18,6 @@ async function main() {
         const { db, auth } = await import(`./firebaseConfig.js${cacheBuster}`);
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
 
-        // Importa os serviços
         const { 
             initializeOrderService, 
             saveOrder, 
@@ -102,9 +101,13 @@ async function main() {
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
-                // Para a carga inicial, não temos filtro definido ainda, então calculamos o geral ou o padrão (Mês Atual)
-                // Assumindo padrão "Este Mês" na inicialização se o filtro estiver setado, ou geral.
-                const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
+                // CORREÇÃO: Calcula o pendente baseando-se em "ESTE MÊS" por padrão.
+                // Isso evita que carregue o valor acumulado de anos anteriores.
+                const now = new Date();
+                const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+                const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -155,11 +158,6 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
-        /**
-         * Helper para extrair as datas atuais do filtro do Dashboard.
-         * Garante que o cálculo de "A Receber" e os filtros de transação
-         * estejam sempre sincronizados com o que o usuário vê.
-         */
         const getCurrentDashboardDates = () => {
             if (!UI.DOM.periodFilter) return { startDate: null, endDate: null };
             
@@ -188,7 +186,6 @@ async function main() {
         };
 
         const handleOrderChange = (type, order, viewType) => {
-            // 1. Atualiza a UI de Pedidos (Kanban)
             const isDelivered = order.orderStatus === 'Entregue';
 
             if (viewType === 'pending') {
@@ -214,26 +211,19 @@ async function main() {
                 }
             }
 
-            // 2. ATUALIZAÇÃO CRÍTICA: Sincroniza o KPI Financeiro "A Receber"
-            // Calcula o valor pendente baseando-se no FILTRO DE DATA ATUAL DO DASHBOARD.
             if (calculateTotalPendingRevenue) {
                 const { startDate, endDate } = getCurrentDashboardDates();
                 const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
-                
-                // Atualiza os KPIs sem recarregar toda a lista de transações se não necessário
                 UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
             }
         };
 
         const handleFinanceChange = (type, transaction, config) => {
-            // 1. Calcula datas do filtro atual
             const { startDate, endDate } = getCurrentDashboardDates();
 
-            // 2. Atualiza KPIs e o valor "A Receber" (com o filtro de datas correto)
             const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startDate, endDate) : 0;
             UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
             
-            // 3. Verifica se a transação modificada deve aparecer na lista atual
             const transactionDate = new Date(transaction.date + 'T00:00:00');
             let passesDateFilter = true;
             
@@ -244,7 +234,6 @@ async function main() {
             const searchTerm = UI.DOM.transactionSearchInput.value.toLowerCase();
             const passesSearchFilter = transaction.description.toLowerCase().includes(searchTerm);
 
-            // Se não passar nos filtros, remove da tela
             if (!passesDateFilter || !passesSearchFilter) {
                 if (type === 'modified' || type === 'removed') {
                     UI.removeTransactionRow(transaction.id);
@@ -252,7 +241,6 @@ async function main() {
                 return; 
             }
 
-            // Se passar, atualiza a lista
             switch (type) {
                 case 'added': UI.addTransactionRow(transaction); break;
                 case 'modified': UI.updateTransactionRow(transaction); break;
@@ -263,7 +251,6 @@ async function main() {
         const handlePricingChange = (type, item) => {
             const isEditMode = !UI.DOM.editPriceTableBtn.classList.contains('hidden');
             const mode = isEditMode ? 'view' : 'edit';
-            
             switch (type) {
                 case 'added': UI.addPriceTableRow(item, mode); break;
                 case 'modified': UI.updatePriceTableRow(item, mode); break;
@@ -271,11 +258,6 @@ async function main() {
             }
         };
 
-
-        // ========================================================
-        // PARTE 5: FUNÇÕES DE LÓGICA TRANSVERSAL (Cross-Cutting)
-        // ========================================================
-        
         const getOptionsFromStorage = (type) => {
             const stored = localStorage.getItem(`${userCompanyId}_${type}`);
             return stored ? JSON.parse(stored) : defaultOptions[type];
@@ -398,11 +380,6 @@ async function main() {
             }
         };
 
-
-        // ========================================================
-        // PARTE 6: INICIALIZAÇÃO DOS EVENT LISTENERS
-        // ========================================================
-        
         initializeAuthListeners(UI);
 
         initializeNavigationListeners(UI, {
@@ -442,7 +419,6 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
-        // Injeção dos serviços necessários no Financeiro
         initializeFinanceListeners(UI, {
             services: {
                 saveTransaction,
@@ -456,11 +432,9 @@ async function main() {
             },
             getConfig: () => userBankBalanceConfig,
             setConfig: (newState) => {
-                // v5.7.10: Suporte para atualizar saldo inicial do Banco e do Caixa
                 if (newState.initialBalance !== undefined) {
                     userBankBalanceConfig.initialBalance = newState.initialBalance;
                 }
-                // (Futuro: aqui entra a atualização do saldo caixa)
             }
         });
 
@@ -490,8 +464,4 @@ async function main() {
         `;
     }
 }
-
-// ========================================================
-// PARTE 7: PONTO DE ENTRADA DA APLICAÇÃO
-// ========================================================
 main();
