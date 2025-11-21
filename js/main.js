@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.19 - SELF-HEALING DATES)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.0 - DEBOUNCED FINANCE)
 // ========================================================
 
 async function main() {
@@ -65,6 +65,9 @@ async function main() {
         let currentOrdersView = 'pending';
         let partCounter = 0;
         let currentOptionType = ''; 
+        
+        // Variável para controle de Debounce (Evitar recálculos excessivos)
+        let financeUpdateDebounce = null;
 
         const defaultOptions = {
             partTypes: ['Gola redonda manga curta', 'Gola redonda manga longa', 'Gola redonda manga longa com capuz', 'Gola redonda manga curta (sublimada na frente)', 'Gola polo manga curta', 'Gola polo manga longa', 'Gola V manga curta', 'Gola V manga longa', 'Short', 'Calça'],
@@ -112,8 +115,8 @@ async function main() {
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+                // Nota: calculateTotalPendingRevenue retornará 0 aqui pois os pedidos ainda não baixaram
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
-                console.log(`🎨 [MAIN] Render inicial (Hardcoded Dates). Pendente: R$ ${pendingRevenue}`);
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -126,22 +129,21 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH (500ms) ---
+                    // --- SAFETY REFRESH (1500ms) - AUMENTADO PARA GARANTIR CARREGAMENTO ---
                     setTimeout(() => {
-                        console.log("⏰ [MAIN] Safety Refresh (500ms)...");
-                        // Garante sincronia visual
+                        console.log("⏰ [MAIN] Safety Refresh (1500ms)...");
+                        
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
                         
                         if (calculateTotalPendingRevenue) {
-                            // Usa o helper que agora tem Autocorreção
                             const dates = getCurrentDashboardDates(); 
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
                             
-                            console.log(`💰 [MAIN] Pendente Pós-Refresh: R$ ${freshPending} (Usando: ${dates.startDate?.toLocaleDateString()} - ${dates.endDate?.toLocaleDateString()})`);
+                            console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
                             UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                         }
-                    }, 500); 
+                    }, 1500); 
 
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -182,10 +184,6 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
-        /**
-         * Helper Robusto com AUTOCORREÇÃO (SELF-HEALING)
-         * Se as datas falharem ou o filtro estiver ambíguo, força "Este Mês".
-         */
         const getCurrentDashboardDates = () => {
             const now = new Date();
             const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -202,10 +200,7 @@ async function main() {
                 if (UI.DOM.startDateInput.value) startDate = new Date(UI.DOM.startDateInput.value + 'T00:00:00');
                 if (UI.DOM.endDateInput.value) endDate = new Date(UI.DOM.endDateInput.value + 'T23:59:59');
                 
-                // AUTOCORREÇÃO: Se o filtro é Custom mas as datas estão vazias,
-                // assume "Este Mês" para não zerar o dashboard por acidente.
                 if (!startDate || !endDate) {
-                    console.warn("⚠️ [MAIN] Filtro Custom sem datas. Forçando 'Este Mês'.");
                     startDate = defaultStart;
                     endDate = defaultEnd;
                 }
@@ -224,7 +219,6 @@ async function main() {
                 }
             }
             
-            // Última linha de defesa
             if (!startDate || !endDate) {
                 startDate = defaultStart;
                 endDate = defaultEnd;
@@ -259,15 +253,18 @@ async function main() {
                 }
             }
 
-            // ATUALIZAÇÃO DOS KPIS FINANCEIROS
+            // ATUALIZAÇÃO DOS KPIS FINANCEIROS COM DEBOUNCE
+            // Agrupa múltiplas atualizações rápidas em uma só para garantir performance e precisão
             if (calculateTotalPendingRevenue) {
-                const { startDate, endDate } = getCurrentDashboardDates();
+                if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
                 
-                // Debug para garantir que as datas não estão nulas
-                // console.log(`🔄 [HANDLER] Datas usadas: ${startDate?.toLocaleDateString()} - ${endDate?.toLocaleDateString()}`);
-                
-                const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
-                UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
+                financeUpdateDebounce = setTimeout(() => {
+                    const { startDate, endDate } = getCurrentDashboardDates();
+                    const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
+                    
+                    // Atualiza silenciosamente apenas os números
+                    UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
+                }, 200); // Espera 200ms após a última alteração para calcular
             }
         };
 
