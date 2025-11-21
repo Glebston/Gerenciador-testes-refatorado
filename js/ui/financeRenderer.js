@@ -1,6 +1,6 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.8.1 - VISUAL AUDIT & HARDENED)
+// MÓDULO FINANCE RENDERER (v5.8.3 - AUDITORIA ATIVA)
 // ==========================================================
 
 import { DOM } from './dom.js';
@@ -99,10 +99,11 @@ const showTransactionsPlaceholder = (isSearch) => {
 };
 
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
-    // --- DIAGNÓSTICO DE ENTRADA ---
-    // console.log(`🎨 [RENDERER] Recebido para pintar -> Pendentes: R$ ${pendingOrdersValue}`);
+    // --- LOG DE AUDITORIA (ATIVO) ---
+    // Este log é crucial para confirmar se o valor R$ 100 está chegando aqui
+    console.log(`🎨 [RENDERER] Iniciando pintura. Argumento pendingOrdersValue recebido:`, pendingOrdersValue);
 
-    const filterValue = DOM.periodFilter.value;
+    const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
     const now = new Date();
     let startDate, endDate;
 
@@ -124,7 +125,6 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     }
     
-    // Fallback de segurança para datas
     if (!startDate || !endDate) {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -170,17 +170,20 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
     const saldoEmCaixa = cashFlow;
 
-    // --- ATUALIZAÇÃO DO DOM COM LOG DE CONFIRMAÇÃO ---
-    DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
-    DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
+    // --- ATUALIZAÇÃO DO DOM SEGURA ---
+    if (DOM.faturamentoBruto) DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
+    if (DOM.despesasTotais) DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
     
-    // Log crucial para confirmar o que está sendo escrito na tela
-    // console.log(`🖌️ [RENDERER] Escrevendo no DOM (A Receber): R$ ${contasAReceber.toFixed(2)}`);
-    DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
+    if (DOM.contasAReceber) {
+        console.log(`🖌️ [RENDERER] Escrevendo no DOM (A Receber): R$ ${contasAReceber.toFixed(2)}`); // AGORA VAI APARECER
+        DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
+    } else {
+        console.error("❌ [RENDERER] ERRO: Elemento 'contasAReceber' não encontrado no DOM.");
+    }
     
-    DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
-    DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
-    DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
+    if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
+    if (DOM.saldoEmConta) DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
+    if (DOM.saldoEmCaixa) DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
     
     const expenseCategories = {}, incomeCategories = {};
     filteredTransactions.forEach(t => {
@@ -196,6 +199,8 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     });
 
     const formatCategoryList = (categoryData, containerElement) => {
+        if (!containerElement) return;
+        
         const sortedCategories = Object.entries(categoryData)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 5);
