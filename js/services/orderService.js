@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.7.14 - Audit & Detailed Logic)
+// MÓDULO ORDER SERVICE (v5.7.15 - Smart Discount Logic)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -10,16 +10,12 @@ import { db } from '../firebaseConfig.js';
 let dbCollection = null;      
 let allOrders = [];           
 let unsubscribeListener = null; 
+const DEBUG_MODE = true; // Mantendo Auditoria ligada conforme solicitado
 
 // --- Funções Auxiliares de Cálculo ---
 
-/**
- * Conta a quantidade total de itens, suportando Grade Comum e Detalhada.
- */
 const countPartItems = (part) => {
     let totalQty = 0;
-
-    // 1. Contagem para Grade Comum (Sizes Object)
     if (part.sizes && typeof part.sizes === 'object') {
         Object.values(part.sizes).forEach(sizesObj => {
             if (sizesObj && typeof sizesObj === 'object') {
@@ -29,13 +25,9 @@ const countPartItems = (part) => {
             }
         });
     }
-
-    // 2. Contagem para Grade Detalhada (Array de Detalhes)
-    // Se for do tipo detalhado, a quantidade é o número de linhas no array details
     if (part.details && Array.isArray(part.details)) {
         totalQty += part.details.length;
     }
-
     return totalQty;
 };
 
@@ -43,8 +35,6 @@ const calculateOrderTotalValue = (order) => {
     let grossTotal = 0;
     if (order.parts && Array.isArray(order.parts)) {
         order.parts.forEach(part => {
-            // Tenta pegar o preço específico, depois o padrão, ou assume 0
-            // Para peças detalhadas, geralmente usa-se unitPrice direto no objeto da peça ou standard
             const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || parseFloat(part.unitPrice) || 0;
             const qty = countPartItems(part);
             grossTotal += (price * qty);
@@ -113,43 +103,29 @@ export const getAllOrders = () => {
     return [...allOrders]; 
 };
 
-/**
- * Calcula o valor total pendente (A Receber) com filtro ESTRITO de datas.
- * v5.7.14: Inclui Logs de Auditoria e Correção de Status Case-Insensitive.
- */
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
-    // [DEBUG] Inicia grupo de log para auditoria (apenas se houver datas definidas para não poluir demais)
-    const isAuditing = startDate || endDate;
+    const isAuditing = (startDate || endDate) && DEBUG_MODE;
     if (isAuditing) console.groupCollapsed("💰 Auditoria de Cálculo A Receber");
 
     const total = allOrders.reduce((acc, order) => {
-        // 1. Verifica Status (Ignora Cancelados e Entregues)
-        // Correção: Normaliza para minúsculas para evitar erros de digitação (ex: "Entregue" vs "entregue")
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
         const status = rawStatus.toLowerCase();
         
         if (status === 'cancelado' || status === 'entregue') return acc;
 
-        // 2. Verifica Filtro de Data
         if (startDate || endDate) {
             const orderDateStr = order.orderDate || order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
-            
-            if (!orderDateStr) return acc; // Sem data, ignora
-
+            if (!orderDateStr) return acc; 
             const orderDate = new Date(orderDateStr + 'T00:00:00');
-
-            if (isNaN(orderDate.getTime())) return acc; // Data inválida, ignora
-            
+            if (isNaN(orderDate.getTime())) return acc; 
             if (startDate && orderDate < startDate) return acc;
             if (endDate && orderDate > endDate) return acc;
         }
 
-        // 3. Calcula Valores
         const totalOrder = calculateOrderTotalValue(order);
         const paid = parseFloat(order.downPayment) || 0;
         const remaining = totalOrder - paid;
 
-        // Só soma se houver valor positivo restante
         if (remaining > 0.01) {
             if (isAuditing) {
                 console.log(`Pedido ID: ${order.id} | Cliente: ${order.clientName} | Data: ${order.orderDate} | Resta: R$ ${remaining.toFixed(2)}`);
@@ -167,19 +143,35 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
     return total;
 };
 
+/**
+ * Atualiza o valor pago e o desconto com lógica inteligente.
+ * v5.7.15: Evita descontos negativos ao aumentar o valor pago.
+ */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
     const orderRef = doc(dbCollection, orderId);
     const orderSnap = await getDoc(orderRef);
     if (!orderSnap.exists()) return;
+
     const orderData = orderSnap.data();
     const currentDiscount = parseFloat(orderData.discount) || 0;
     const currentPaid = parseFloat(orderData.downPayment) || 0;
-    const adjustment = diffValue * -1; 
-    await updateDoc(orderRef, {
-        discount: currentDiscount + adjustment,
-        downPayment: currentPaid + diffValue 
-    });
+
+    // Objeto de atualização base
+    let updates = {
+        downPayment: currentPaid + diffValue
+    };
+
+    // LÓGICA INTELIGENTE:
+    // 1. Se diffValue < 0 (Diminuiu o valor, ex: taxa), aumentamos o desconto para manter o saldo devedor igual.
+    // 2. Se diffValue > 0 (Aumentou o valor, ex: correção), NÃO mexemos no desconto, para que o saldo devedor diminua.
+    if (diffValue < 0) {
+        const adjustment = diffValue * -1; 
+        updates.discount = currentDiscount + adjustment;
+    }
+    // Se diffValue > 0, não adicionamos 'discount' ao objeto updates, mantendo o original.
+
+    await updateDoc(orderRef, updates);
 };
 
 export const cleanupOrderService = () => {
