@@ -1,14 +1,11 @@
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.7.19 - VISUAL FIX)
+// MÓDULO FINANCE RENDERER (v5.7.20 - DEBUG VISUAL)
 // Responsabilidade: Gerenciar a renderização de tudo 
 // relacionado ao Dashboard Financeiro.
 // ==========================================================
 
 import { DOM } from './dom.js';
 
-/**
- * Cria o HTML para uma única linha de transação
- */
 const generateTransactionRowHTML = (t) => {
     const isIncome = t.type === 'income';
     const isReceivable = isIncome && t.status === 'a_receber';
@@ -102,9 +99,6 @@ const showTransactionsPlaceholder = (isSearch) => {
     DOM.transactionsList.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500 transactions-placeholder">${message}</td></tr>`;
 };
 
-/**
- * Renderiza apenas os KPIs (cards superiores)
- */
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     const filterValue = DOM.periodFilter.value;
     const now = new Date();
@@ -128,7 +122,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     }
     
-    // Se as datas falharem, assume este mês como fallback de segurança
+    // Fallback de segurança para datas
     if (!startDate || !endDate) {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -166,27 +160,28 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     });
 
-    // CORREÇÃO CRÍTICA: Soma o valor pendente dos pedidos ao KPI
-    // Força a conversão para float para garantir que não concatene strings
+    // --- A CORREÇÃO QUE FALTAVA ---
     const pendingValueFloat = parseFloat(pendingOrdersValue) || 0;
+    
+    // [LOG DEBUG VISUAL] Confirma no console que o valor está sendo somado
+    // console.log(`🎨 [RENDERER] KPI A Receber. Transações: ${contasAReceber.toFixed(2)} + Pedidos Pendentes: ${pendingValueFloat.toFixed(2)}`);
+    
     contasARReceber += pendingValueFloat;
 
     const lucroLiquido = valorRecebido - despesasTotais;
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
     const saldoEmCaixa = cashFlow;
 
-    // Atualização do DOM
     DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
     DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
     
-    // AQUI A MÁGICA: Garantimos que o valor calculado seja exibido
+    // Atualiza o valor na tela
     DOM.contasAReceber.textContent = `R$ ${contasARReceber.toFixed(2)}`;
     
     DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
     DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
     DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
     
-    // Renderiza categorias (Top Despesas/Receitas)
     const expenseCategories = {}, incomeCategories = {};
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
