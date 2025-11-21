@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.12 - Default Date Fix)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.16 - Fix Inicialização Zero)
 // ========================================================
 
 async function main() {
@@ -101,12 +101,12 @@ async function main() {
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
-                // CORREÇÃO: Calcula o pendente baseando-se em "ESTE MÊS" por padrão.
-                // Isso evita que carregue o valor acumulado de anos anteriores.
+                // 1. Define datas padrão (Este Mês) para o cálculo inicial
                 const now = new Date();
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+                // 2. Tenta calcular (será 0 se os dados ainda não chegaram)
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
@@ -119,6 +119,19 @@ async function main() {
                 setTimeout(() => {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
+                    
+                    // --- CORREÇÃO SÊNIOR (SAFETY REFRESH) ---
+                    // Força uma atualização dos KPIs financeiros após 500ms.
+                    // Isso garante que, assim que os dados do Firestore chegarem e povoarem a lista,
+                    // o valor "A Receber" saia de Zero e mostre a realidade, mesmo sem interação do usuário.
+                    setTimeout(() => {
+                        if (calculateTotalPendingRevenue) {
+                            const dates = getCurrentDashboardDates(); // Usa o helper robusto
+                            const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
+                            UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
+                        }
+                    }, 800); 
+
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             checkBackupReminder();
@@ -158,10 +171,25 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
+        /**
+         * Helper robusto para extrair datas.
+         * v5.7.16: Adicionado fallback de segurança. Se o DOM não responder, 
+         * assume "Este Mês" em vez de quebrar ou retornar nulo.
+         */
         const getCurrentDashboardDates = () => {
-            if (!UI.DOM.periodFilter) return { startDate: null, endDate: null };
+            // Fallback de segurança: Se o elemento UI não existir ainda
+            if (!UI.DOM.periodFilter) {
+                const now = new Date();
+                return { 
+                    startDate: new Date(now.getFullYear(), now.getMonth(), 1), 
+                    endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) 
+                };
+            }
             
-            const filter = UI.DOM.periodFilter.value;
+            let filter = UI.DOM.periodFilter.value;
+            // Se o valor estiver vazio na inicialização, força 'thisMonth'
+            if (!filter) filter = 'thisMonth'; 
+
             const now = new Date();
             let startDate = null, endDate = null;
 
@@ -182,6 +210,12 @@ async function main() {
                     case 'thisYear': startDate = startOfThisYear; endDate = endOfThisYear; break;
                 }
             }
+            // Fallback final: Se nenhuma data foi gerada (ex: filtro inválido), assume este mês
+            if (!startDate && !endDate && filter !== 'custom') {
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            }
+
             return { startDate, endDate };
         };
 
