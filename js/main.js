@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.18 - FORCE SYNC)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.19 - SELF-HEALING DATES)
 // ========================================================
 
 async function main() {
@@ -96,8 +96,7 @@ async function main() {
                 }
                 UI.DOM.userEmail.textContent = userCompanyName;
                 
-                // --- CORREÇÃO DE SINCRONIA VISUAL ---
-                // Força o select a mostrar "Este Mês" visualmente e logica para garantir alinhamento
+                // --- FORCE SYNC VISUAL ---
                 if (UI.DOM.periodFilter) {
                     UI.DOM.periodFilter.value = 'thisMonth';
                 }
@@ -108,13 +107,13 @@ async function main() {
                 initializeFinanceService(userCompanyId, handleFinanceChange, () => userBankBalanceConfig);
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
-                // --- RENDERIZAÇÃO INICIAL ---
+                // --- RENDERIZAÇÃO INICIAL (HARDCODED "THIS MONTH") ---
                 const now = new Date();
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
-                console.log(`🎨 [MAIN] Render inicial. Pendente Calculado: R$ ${pendingRevenue}`);
+                console.log(`🎨 [MAIN] Render inicial (Hardcoded Dates). Pendente: R$ ${pendingRevenue}`);
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -127,20 +126,22 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH TURBINADO ---
+                    // --- SAFETY REFRESH (500ms) ---
                     setTimeout(() => {
-                        console.log("⏰ [MAIN] Disparando Safety Refresh (800ms)...");
-                        // Garante novamente que o filtro está certo
+                        console.log("⏰ [MAIN] Safety Refresh (500ms)...");
+                        // Garante sincronia visual
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
                         
                         if (calculateTotalPendingRevenue) {
+                            // Usa o helper que agora tem Autocorreção
                             const dates = getCurrentDashboardDates(); 
-                            console.log("📅 [MAIN] Refresh usando datas:", dates.startDate?.toLocaleDateString(), "até", dates.endDate?.toLocaleDateString());
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
-                            console.log(`💰 [MAIN] Pendente Pós-Refresh: R$ ${freshPending}`);
+                            
+                            console.log(`💰 [MAIN] Pendente Pós-Refresh: R$ ${freshPending} (Usando: ${dates.startDate?.toLocaleDateString()} - ${dates.endDate?.toLocaleDateString()})`);
+                            
                             UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                         }
-                    }, 800); 
+                    }, 500); 
 
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -181,28 +182,36 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
+        /**
+         * Helper Robusto com AUTOCORREÇÃO (SELF-HEALING)
+         * Se as datas falharem ou o filtro estiver ambíguo, força "Este Mês".
+         */
         const getCurrentDashboardDates = () => {
-            if (!UI.DOM.periodFilter) {
-                const now = new Date();
-                return { 
-                    startDate: new Date(now.getFullYear(), now.getMonth(), 1), 
-                    endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) 
-                };
-            }
+            const now = new Date();
+            const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+            if (!UI.DOM.periodFilter) return { startDate: defaultStart, endDate: defaultEnd };
             
             let filter = UI.DOM.periodFilter.value;
-            // Força padrão se vazio
             if (!filter) filter = 'thisMonth'; 
 
-            const now = new Date();
             let startDate = null, endDate = null;
 
             if (filter === 'custom') {
                 if (UI.DOM.startDateInput.value) startDate = new Date(UI.DOM.startDateInput.value + 'T00:00:00');
                 if (UI.DOM.endDateInput.value) endDate = new Date(UI.DOM.endDateInput.value + 'T23:59:59');
+                
+                // AUTOCORREÇÃO: Se o filtro é Custom mas as datas estão vazias,
+                // assume "Este Mês" para não zerar o dashboard por acidente.
+                if (!startDate || !endDate) {
+                    console.warn("⚠️ [MAIN] Filtro Custom sem datas. Forçando 'Este Mês'.");
+                    startDate = defaultStart;
+                    endDate = defaultEnd;
+                }
             } else {
-                const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                const startOfThisMonth = defaultStart;
+                const endOfThisMonth = defaultEnd;
                 const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
                 const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
                 const startOfThisYear = new Date(now.getFullYear(), 0, 1);
@@ -215,9 +224,10 @@ async function main() {
                 }
             }
             
-            if (!startDate && !endDate && filter !== 'custom') {
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            // Última linha de defesa
+            if (!startDate || !endDate) {
+                startDate = defaultStart;
+                endDate = defaultEnd;
             }
 
             return { startDate, endDate };
@@ -251,11 +261,10 @@ async function main() {
 
             // ATUALIZAÇÃO DOS KPIS FINANCEIROS
             if (calculateTotalPendingRevenue) {
-                // [AUDITORIA DE DATA]
                 const { startDate, endDate } = getCurrentDashboardDates();
                 
-                // Log para verificar se as datas estão chegando corretas na hora que o pedido entra
-                // console.log(`🔄 [HANDLER] Pedido chegou. Recalculando para: ${startDate?.toLocaleDateString()} até ${endDate?.toLocaleDateString()}`);
+                // Debug para garantir que as datas não estão nulas
+                // console.log(`🔄 [HANDLER] Datas usadas: ${startDate?.toLocaleDateString()} - ${endDate?.toLocaleDateString()}`);
                 
                 const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
                 UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
