@@ -1,12 +1,9 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v4.5.1 - Patch Financeiro)
+// MÓDULO ORDER SERVICE (v5.7.12 - Strict Filter)
 // ==========================================================
 
-// Importa as funções necessárias do Firestore
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-// Importa a instância 'db' do nosso arquivo de configuração
 import { db } from '../firebaseConfig.js';
 
 // --- Estado do Módulo ---
@@ -16,9 +13,6 @@ let unsubscribeListener = null;
 
 // --- Funções Auxiliares de Cálculo ---
 
-/**
- * Conta a quantidade total de itens dentro da estrutura complexa de tamanhos.
- */
 const countPartItems = (part) => {
     let totalQty = 0;
     if (part.sizes && typeof part.sizes === 'object') {
@@ -33,12 +27,8 @@ const countPartItems = (part) => {
     return totalQty;
 };
 
-/**
- * Calcula o valor total de um pedido baseado nas peças e no desconto.
- */
 const calculateOrderTotalValue = (order) => {
     let grossTotal = 0;
-
     if (order.parts && Array.isArray(order.parts)) {
         order.parts.forEach(part => {
             const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || 0;
@@ -46,11 +36,9 @@ const calculateOrderTotalValue = (order) => {
             grossTotal += (price * qty);
         });
     }
-
     const discount = parseFloat(order.discount) || 0;
     return grossTotal - discount;
 };
-
 
 // --- Funções Privadas do Firestore ---
 
@@ -59,7 +47,6 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
 
     const q = query(dbCollection);
     unsubscribeListener = onSnapshot(q, (snapshot) => {
-        
         snapshot.docChanges().forEach((change) => {
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allOrders.findIndex(o => o.id === data.id);
@@ -77,12 +64,10 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
                 granularUpdateCallback(change.type, data, getViewCallback());
             }
         });
-
     }, (error) => {
         console.error("Erro ao buscar pedidos em tempo real:", error);
     });
 };
-
 
 // --- API Pública do Módulo ---
 
@@ -115,28 +100,32 @@ export const getAllOrders = () => {
 };
 
 /**
- * Calcula o valor total pendente (A Receber) dentro de um período.
- * v5.7.10: Adicionado suporte a filtro de datas (startDate, endDate).
- * Se as datas forem nulas, calcula de todo o período (comportamento original).
+ * Calcula o valor total pendente (A Receber) com filtro ESTRITO de datas.
+ * Correção Crítica: Se o pedido não tiver data válida e houver filtro ativo, ele é ignorado.
  */
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     return allOrders.reduce((acc, order) => {
         // 1. Verifica Status (Ignora Cancelados e Entregues)
-        const status = order.orderStatus || '';
+        // Uso de trim() para evitar erros com espaços em branco ("Entregue ")
+        const status = order.orderStatus ? order.orderStatus.trim() : '';
         if (status === 'Cancelado' || status === 'Entregue') return acc;
 
-        // 2. Verifica Filtro de Data (Se fornecido)
+        // 2. Verifica Filtro de Data
         if (startDate || endDate) {
-            // Tenta usar order.date (YYYY-MM-DD) ou order.createdAt
-            // Ajuste para garantir compatibilidade com string ou Date object
+            // Tenta obter a data do pedido (date ou createdAt)
             const orderDateStr = order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
             
-            if (orderDateStr) {
-                const orderDate = new Date(orderDateStr + 'T00:00:00');
-                
-                if (startDate && orderDate < startDate) return acc;
-                if (endDate && orderDate > endDate) return acc;
-            }
+            // CORREÇÃO: Se não tem data, não podemos saber se pertence ao mês. 
+            // Por segurança, IGNORAMOS para não sujar o KPI do mês atual com lixo antigo.
+            if (!orderDateStr) return acc;
+
+            const orderDate = new Date(orderDateStr + 'T00:00:00');
+
+            // CORREÇÃO: Se a data for inválida (NaN), ignora o pedido
+            if (isNaN(orderDate.getTime())) return acc;
+            
+            if (startDate && orderDate < startDate) return acc;
+            if (endDate && orderDate > endDate) return acc;
         }
 
         // 3. Calcula Valores
@@ -144,29 +133,20 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
         const paid = parseFloat(order.downPayment) || 0;
         const remaining = total - paid;
 
-        // Só soma se houver valor positivo restante
-        return acc + (remaining > 0 ? remaining : 0);
+        // Só soma se houver valor positivo restante (> 0.01 para evitar erros de arredondamento)
+        return acc + (remaining > 0.01 ? remaining : 0);
     }, 0);
 };
 
-/**
- * Atualiza o desconto e o valor pago no pedido.
- */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
-
     const orderRef = doc(dbCollection, orderId);
     const orderSnap = await getDoc(orderRef);
-
     if (!orderSnap.exists()) return;
-
     const orderData = orderSnap.data();
-    
     const currentDiscount = parseFloat(orderData.discount) || 0;
     const currentPaid = parseFloat(orderData.downPayment) || 0;
-
     const adjustment = diffValue * -1; 
-
     await updateDoc(orderRef, {
         discount: currentDiscount + adjustment,
         downPayment: currentPaid + diffValue 
