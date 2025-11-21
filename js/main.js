@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.16 - Fix Inicialização Zero)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.17 - AUDITORIA DE INICIALIZAÇÃO)
 // ========================================================
 
 async function main() {
@@ -77,6 +77,7 @@ async function main() {
         // ========================================================
         
         const initializeAppLogic = async (user) => {
+            console.log("🚀 [MAIN] Iniciando lógica da aplicação...");
             const userMappingRef = doc(db, "user_mappings", user.uid);
             const userMappingSnap = await getDoc(userMappingRef);
             
@@ -96,18 +97,18 @@ async function main() {
                 UI.DOM.userEmail.textContent = userCompanyName;
                 
                 // --- INICIALIZAÇÃO REATIVA ---
+                console.log("🔌 [MAIN] Conectando serviços...");
                 initializeOrderService(userCompanyId, handleOrderChange, () => currentOrdersView);
                 initializeFinanceService(userCompanyId, handleFinanceChange, () => userBankBalanceConfig);
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
-                // 1. Define datas padrão (Este Mês) para o cálculo inicial
                 const now = new Date();
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-                // 2. Tenta calcular (será 0 se os dados ainda não chegaram)
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
+                console.log(`🎨 [MAIN] Render inicial (antes dos dados). Pendente Calculado: R$ ${pendingRevenue}`);
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -120,14 +121,14 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- CORREÇÃO SÊNIOR (SAFETY REFRESH) ---
-                    // Força uma atualização dos KPIs financeiros após 500ms.
-                    // Isso garante que, assim que os dados do Firestore chegarem e povoarem a lista,
-                    // o valor "A Receber" saia de Zero e mostre a realidade, mesmo sem interação do usuário.
+                    // --- SAFETY REFRESH COM LOG ---
                     setTimeout(() => {
+                        console.log("⏰ [MAIN] Disparando Safety Refresh (800ms)...");
                         if (calculateTotalPendingRevenue) {
-                            const dates = getCurrentDashboardDates(); // Usa o helper robusto
+                            const dates = getCurrentDashboardDates(); 
+                            console.log("📅 [MAIN] Datas lidas no Refresh:", dates);
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
+                            console.log(`💰 [MAIN] Pendente no Refresh: R$ ${freshPending}`);
                             UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                         }
                     }, 800); 
@@ -171,13 +172,7 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
-        /**
-         * Helper robusto para extrair datas.
-         * v5.7.16: Adicionado fallback de segurança. Se o DOM não responder, 
-         * assume "Este Mês" em vez de quebrar ou retornar nulo.
-         */
         const getCurrentDashboardDates = () => {
-            // Fallback de segurança: Se o elemento UI não existir ainda
             if (!UI.DOM.periodFilter) {
                 const now = new Date();
                 return { 
@@ -187,7 +182,6 @@ async function main() {
             }
             
             let filter = UI.DOM.periodFilter.value;
-            // Se o valor estiver vazio na inicialização, força 'thisMonth'
             if (!filter) filter = 'thisMonth'; 
 
             const now = new Date();
@@ -210,7 +204,7 @@ async function main() {
                     case 'thisYear': startDate = startOfThisYear; endDate = endOfThisYear; break;
                 }
             }
-            // Fallback final: Se nenhuma data foi gerada (ex: filtro inválido), assume este mês
+            
             if (!startDate && !endDate && filter !== 'custom') {
                 startDate = new Date(now.getFullYear(), now.getMonth(), 1);
                 endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -220,6 +214,9 @@ async function main() {
         };
 
         const handleOrderChange = (type, order, viewType) => {
+            // [DEBUG LOG] Monitorando a chegada de pedidos
+            // console.log(`📦 [HANDLER] Pedido alterado/adicionado: ${type} - ID: ${order.id}`);
+
             const isDelivered = order.orderStatus === 'Entregue';
 
             if (viewType === 'pending') {
@@ -245,9 +242,14 @@ async function main() {
                 }
             }
 
+            // ATUALIZAÇÃO DOS KPIS FINANCEIROS
             if (calculateTotalPendingRevenue) {
                 const { startDate, endDate } = getCurrentDashboardDates();
                 const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
+                
+                // [DEBUG LOG] Apenas descomente se quiser ver o cálculo a cada pedido (pode poluir muito)
+                // console.log(`💰 [HANDLER] Recalculando Pendente: R$ ${pendingRevenue}`);
+                
                 UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
             }
         };
