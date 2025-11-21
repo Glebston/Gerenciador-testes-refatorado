@@ -1,5 +1,6 @@
+// js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.10 "Sincronia Blindada")
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.11 "Correção de Sincronia de Datas")
 // ========================================================
 
 async function main() {
@@ -17,7 +18,7 @@ async function main() {
         const { db, auth } = await import(`./firebaseConfig.js${cacheBuster}`);
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
 
-        // Importa os serviços, incluindo as novas funções de cálculo e atualização
+        // Importa os serviços
         const { 
             initializeOrderService, 
             saveOrder, 
@@ -101,8 +102,10 @@ async function main() {
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
                 // --- RENDERIZAÇÃO INICIAL ---
-                // Calcula o pendente inicial (pode ser 0 se os dados ainda não chegaram, mas será corrigido pelo handleOrderChange)
+                // Para a carga inicial, não temos filtro definido ainda, então calculamos o geral ou o padrão (Mês Atual)
+                // Assumindo padrão "Este Mês" na inicialização se o filtro estiver setado, ou geral.
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
+                
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
                 
@@ -152,6 +155,38 @@ async function main() {
         // PARTE 4: HANDLERS DE MUDANÇA (LÓGICA REATIVA)
         // ========================================================
 
+        /**
+         * Helper para extrair as datas atuais do filtro do Dashboard.
+         * Garante que o cálculo de "A Receber" e os filtros de transação
+         * estejam sempre sincronizados com o que o usuário vê.
+         */
+        const getCurrentDashboardDates = () => {
+            if (!UI.DOM.periodFilter) return { startDate: null, endDate: null };
+            
+            const filter = UI.DOM.periodFilter.value;
+            const now = new Date();
+            let startDate = null, endDate = null;
+
+            if (filter === 'custom') {
+                if (UI.DOM.startDateInput.value) startDate = new Date(UI.DOM.startDateInput.value + 'T00:00:00');
+                if (UI.DOM.endDateInput.value) endDate = new Date(UI.DOM.endDateInput.value + 'T23:59:59');
+            } else {
+                const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+                const startOfThisYear = new Date(now.getFullYear(), 0, 1);
+                const endOfThisYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+
+                switch(filter) {
+                    case 'thisMonth': startDate = startOfThisMonth; endDate = endOfThisMonth; break;
+                    case 'lastMonth': startDate = startOfLastMonth; endDate = endOfLastMonth; break;
+                    case 'thisYear': startDate = startOfThisYear; endDate = endOfThisYear; break;
+                }
+            }
+            return { startDate, endDate };
+        };
+
         const handleOrderChange = (type, order, viewType) => {
             // 1. Atualiza a UI de Pedidos (Kanban)
             const isDelivered = order.orderStatus === 'Entregue';
@@ -180,44 +215,28 @@ async function main() {
             }
 
             // 2. ATUALIZAÇÃO CRÍTICA: Sincroniza o KPI Financeiro "A Receber"
-            // Sempre que um pedido é carregado ou alterado, recalculamos o valor pendente
-            // e atualizamos os KPIs financeiros. Isso resolve o problema do "Zero ao Carregar".
+            // Calcula o valor pendente baseando-se no FILTRO DE DATA ATUAL DO DASHBOARD.
             if (calculateTotalPendingRevenue) {
-                const pendingRevenue = calculateTotalPendingRevenue();
-                const currentTransactions = getAllTransactions ? getAllTransactions() : [];
+                const { startDate, endDate } = getCurrentDashboardDates();
+                const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
                 
-                // Só renderiza se o painel financeiro estiver visível ou se precisarmos atualizar os dados em background
-                // (Chamamos direto para garantir consistência)
-                UI.renderFinanceKPIs(currentTransactions, userBankBalanceConfig, pendingRevenue);
+                // Atualiza os KPIs sem recarregar toda a lista de transações se não necessário
+                UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
             }
         };
 
         const handleFinanceChange = (type, transaction, config) => {
-            // Ao mexer no financeiro, também precisamos garantir que o valor pendente continue lá
-            const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue() : 0;
+            // 1. Calcula datas do filtro atual
+            const { startDate, endDate } = getCurrentDashboardDates();
+
+            // 2. Atualiza KPIs e o valor "A Receber" (com o filtro de datas correto)
+            const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startDate, endDate) : 0;
             UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
             
-            const filter = UI.DOM.periodFilter.value;
-            const now = new Date();
-            let startDate, endDate;
-
-            if (filter === 'custom') {
-                startDate = UI.DOM.startDateInput.value ? new Date(UI.DOM.startDateInput.value + 'T00:00:00') : null;
-                endDate = UI.DOM.endDateInput.value ? new Date(UI.DOM.endDateInput.value + 'T23:59:59') : null;
-            } else {
-                const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-                const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-                const startOfThisYear = new Date(now.getFullYear(), 0, 1);
-                const endOfThisYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-                if (filter === 'thisMonth') { startDate = startOfThisMonth; endDate = endOfThisMonth; }
-                if (filter === 'lastMonth') { startDate = startOfLastMonth; endDate = endOfLastMonth; }
-                if (filter === 'thisYear') { startDate = startOfThisYear; endDate = endOfThisYear; }
-            }
-            
+            // 3. Verifica se a transação modificada deve aparecer na lista atual
             const transactionDate = new Date(transaction.date + 'T00:00:00');
             let passesDateFilter = true;
+            
             if (startDate && endDate) passesDateFilter = transactionDate >= startDate && transactionDate <= endDate;
             else if(startDate && !endDate) passesDateFilter = transactionDate >= startDate;
             else if(!startDate && endDate) passesDateFilter = transactionDate <= endDate;
@@ -225,6 +244,7 @@ async function main() {
             const searchTerm = UI.DOM.transactionSearchInput.value.toLowerCase();
             const passesSearchFilter = transaction.description.toLowerCase().includes(searchTerm);
 
+            // Se não passar nos filtros, remove da tela
             if (!passesDateFilter || !passesSearchFilter) {
                 if (type === 'modified' || type === 'removed') {
                     UI.removeTransactionRow(transaction.id);
@@ -232,6 +252,7 @@ async function main() {
                 return; 
             }
 
+            // Se passar, atualiza a lista
             switch (type) {
                 case 'added': UI.addTransactionRow(transaction); break;
                 case 'modified': UI.updateTransactionRow(transaction); break;
