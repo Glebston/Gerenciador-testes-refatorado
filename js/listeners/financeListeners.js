@@ -92,7 +92,6 @@ export function initializeFinanceListeners(UI, deps) {
             const transactionId = UI.DOM.transactionId.value;
             
             // LÓGICA DE SINCRONIZAÇÃO DE DESCONTO
-            // Se estamos editando e os serviços necessários existem
             if (transactionId && services.getTransactionById && services.updateOrderDiscountFromFinance) {
                 const originalTransaction = services.getTransactionById(transactionId);
 
@@ -141,8 +140,35 @@ export function initializeFinanceListeners(UI, deps) {
 
     // --- Filtros do Dashboard Financeiro ---
     const renderFullDashboard = () => {
-        // Busca o valor atualizado das pendências de pedidos (se a função existir)
-        const pendingRevenue = services.calculateTotalPendingRevenue ? services.calculateTotalPendingRevenue() : 0;
+        // 1. Determina as datas do filtro para passar ao cálculo de pedidos
+        const filter = UI.DOM.periodFilter.value;
+        const now = new Date();
+        let startDate = null, endDate = null;
+
+        if (filter === 'custom') {
+            if (UI.DOM.startDateInput.value) startDate = new Date(UI.DOM.startDateInput.value + 'T00:00:00');
+            if (UI.DOM.endDateInput.value) endDate = new Date(UI.DOM.endDateInput.value + 'T23:59:59');
+        } else {
+            // Lógica duplicada propositalmente para extrair as datas antes da renderização
+            const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            const startOfThisYear = new Date(now.getFullYear(), 0, 1);
+            const endOfThisYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+
+            switch(filter) {
+                case 'thisMonth': startDate = startOfThisMonth; endDate = endOfThisMonth; break;
+                case 'lastMonth': startDate = startOfLastMonth; endDate = endOfLastMonth; break;
+                case 'thisYear': startDate = startOfThisYear; endDate = endOfThisYear; break;
+            }
+        }
+
+        // 2. Busca o valor atualizado das pendências de pedidos FILTRADO PELA DATA
+        const pendingRevenue = services.calculateTotalPendingRevenue 
+            ? services.calculateTotalPendingRevenue(startDate, endDate) 
+            : 0;
+            
         UI.renderFinanceDashboard(services.getAllTransactions(), getConfig(), pendingRevenue);
     };
 
