@@ -1,7 +1,6 @@
+// js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.7.20 - DEBUG VISUAL)
-// Responsabilidade: Gerenciar a renderização de tudo 
-// relacionado ao Dashboard Financeiro.
+// MÓDULO FINANCE RENDERER (v5.8.1 - VISUAL AUDIT & HARDENED)
 // ==========================================================
 
 import { DOM } from './dom.js';
@@ -100,6 +99,9 @@ const showTransactionsPlaceholder = (isSearch) => {
 };
 
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
+    // --- DIAGNÓSTICO DE ENTRADA ---
+    // console.log(`🎨 [RENDERER] Recebido para pintar -> Pendentes: R$ ${pendingOrdersValue}`);
+
     const filterValue = DOM.periodFilter.value;
     const now = new Date();
     let startDate, endDate;
@@ -134,7 +136,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         return true;
     });
 
-    let faturamentoBruto = 0, despesasTotais = 0, contasARReceber = 0, valorRecebido = 0;
+    let faturamentoBruto = 0, despesasTotais = 0, contasAReceber = 0, valorRecebido = 0;
     let bankFlow = 0;
     let cashFlow = 0;
 
@@ -143,7 +145,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         if (t.type === 'income') {
             faturamentoBruto += amount;
             if (t.status === 'a_receber') {
-                contasARReceber += amount;
+                contasAReceber += amount;
             } else {
                 valorRecebido += amount;
             }
@@ -160,23 +162,21 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     });
 
-    // --- A CORREÇÃO QUE FALTAVA ---
+    // --- CORREÇÃO E SOMA ---
     const pendingValueFloat = parseFloat(pendingOrdersValue) || 0;
-    
-    // [LOG DEBUG VISUAL] Confirma no console que o valor está sendo somado
-    // console.log(`🎨 [RENDERER] KPI A Receber. Transações: ${contasAReceber.toFixed(2)} + Pedidos Pendentes: ${pendingValueFloat.toFixed(2)}`);
-    
-    contasARReceber += pendingValueFloat;
+    contasAReceber += pendingValueFloat;
 
     const lucroLiquido = valorRecebido - despesasTotais;
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
     const saldoEmCaixa = cashFlow;
 
+    // --- ATUALIZAÇÃO DO DOM COM LOG DE CONFIRMAÇÃO ---
     DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
     DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
     
-    // Atualiza o valor na tela
-    DOM.contasAReceber.textContent = `R$ ${contasARReceber.toFixed(2)}`;
+    // Log crucial para confirmar o que está sendo escrito na tela
+    // console.log(`🖌️ [RENDERER] Escrevendo no DOM (A Receber): R$ ${contasAReceber.toFixed(2)}`);
+    DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
     
     DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
     DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
