@@ -1,4 +1,7 @@
 // js/listeners/financeListeners.js
+// ==========================================================
+// MÓDULO FINANCE LISTENERS (v5.8.4 - SYNC & CALCULATION FIX)
+// ==========================================================
 
 /**
  * Lida com a lógica de preenchimento do modal para editar uma transação.
@@ -139,9 +142,14 @@ export function initializeFinanceListeners(UI, deps) {
     });
 
     // --- Filtros do Dashboard Financeiro ---
+    
+    // Debounce para inputs de texto (Search e Datas Customizadas)
+    // Isso evita que o cálculo seja disparado a cada tecla, dando tempo para o valor estabilizar
+    let filterDebounceTimeout;
+
     const renderFullDashboard = () => {
         // 1. Determina as datas do filtro para passar ao cálculo de pedidos
-        const filter = UI.DOM.periodFilter.value;
+        const filter = UI.DOM.periodFilter ? UI.DOM.periodFilter.value : 'thisMonth';
         const now = new Date();
         let startDate = null, endDate = null;
 
@@ -149,7 +157,6 @@ export function initializeFinanceListeners(UI, deps) {
             if (UI.DOM.startDateInput.value) startDate = new Date(UI.DOM.startDateInput.value + 'T00:00:00');
             if (UI.DOM.endDateInput.value) endDate = new Date(UI.DOM.endDateInput.value + 'T23:59:59');
         } else {
-            // Lógica duplicada propositalmente para extrair as datas antes da renderização
             const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
             const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -163,8 +170,15 @@ export function initializeFinanceListeners(UI, deps) {
                 case 'thisYear': startDate = startOfThisYear; endDate = endOfThisYear; break;
             }
         }
+        
+        // Fallback de Segurança se as datas não estiverem definidas (assume mês atual)
+        if (!startDate || !endDate) {
+             startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+             endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        }
 
         // 2. Busca o valor atualizado das pendências de pedidos FILTRADO PELA DATA
+        // Adiciona log para debug se necessário
         const pendingRevenue = services.calculateTotalPendingRevenue 
             ? services.calculateTotalPendingRevenue(startDate, endDate) 
             : 0;
@@ -178,7 +192,12 @@ export function initializeFinanceListeners(UI, deps) {
     });
 
     [UI.DOM.startDateInput, UI.DOM.endDateInput, UI.DOM.transactionSearchInput].forEach(element => {
-        if(element) element.addEventListener('input', renderFullDashboard);
+        if(element) {
+            element.addEventListener('input', () => {
+                clearTimeout(filterDebounceTimeout);
+                filterDebounceTimeout = setTimeout(renderFullDashboard, 300); // Espera 300ms antes de renderizar
+            });
+        }
     });
 
     // --- Ajuste de Saldo ---
@@ -194,9 +213,9 @@ export function initializeFinanceListeners(UI, deps) {
             return;
         }
         await services.saveInitialBalance(newBalance);
-        setConfig({ initialBalance: newBalance }); // Atualiza o estado local no main.js
+        setConfig({ initialBalance: newBalance }); 
         
-        renderFullDashboard(); // Renderiza KPIs e lista, pois o saldo em conta mudou
+        renderFullDashboard(); 
         UI.DOM.initialBalanceModal.classList.add('hidden');
     });
 
