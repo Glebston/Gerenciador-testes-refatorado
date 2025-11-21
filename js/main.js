@@ -1,10 +1,11 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.0 - DEBOUNCED FINANCE)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.2 - CACHE BYPASS)
 // ========================================================
 
 async function main() {
     
+    // Cache Buster Global
     const cacheBuster = `?v=${new Date().getTime()}`;
 
     try {
@@ -44,6 +45,8 @@ async function main() {
         
         const { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } = await import(`./services/pricingService.js${cacheBuster}`);
         const { initializeIdleTimer } = await import(`./utils.js${cacheBuster}`);
+        
+        // Importa a UI normalmente para o fluxo geral
         const UI = await import(`./ui.js${cacheBuster}`);
 
         const { initializeAuthListeners } = await import(`./listeners/authListeners.js${cacheBuster}`);
@@ -66,7 +69,6 @@ async function main() {
         let partCounter = 0;
         let currentOptionType = ''; 
         
-        // Variável para controle de Debounce (Evitar recálculos excessivos)
         let financeUpdateDebounce = null;
 
         const defaultOptions = {
@@ -99,7 +101,6 @@ async function main() {
                 }
                 UI.DOM.userEmail.textContent = userCompanyName;
                 
-                // --- FORCE SYNC VISUAL ---
                 if (UI.DOM.periodFilter) {
                     UI.DOM.periodFilter.value = 'thisMonth';
                 }
@@ -110,12 +111,11 @@ async function main() {
                 initializeFinanceService(userCompanyId, handleFinanceChange, () => userBankBalanceConfig);
                 initializePricingService(userCompanyId, handlePricingChange); 
                 
-                // --- RENDERIZAÇÃO INICIAL (HARDCODED "THIS MONTH") ---
+                // --- RENDERIZAÇÃO INICIAL ---
                 const now = new Date();
                 const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-                // Nota: calculateTotalPendingRevenue retornará 0 aqui pois os pedidos ainda não baixaram
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
@@ -129,8 +129,8 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH (1500ms) - AUMENTADO PARA GARANTIR CARREGAMENTO ---
-                    setTimeout(() => {
+                    // --- SAFETY REFRESH (1500ms) - COM BYPASS DE CACHE VISUAL ---
+                    setTimeout(async () => {
                         console.log("⏰ [MAIN] Safety Refresh (1500ms)...");
                         
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
@@ -141,7 +141,18 @@ async function main() {
                             
                             console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
+                            // TENTATIVA 1: Via UI Normal (pode estar cacheada)
                             UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
+                            
+                            // TENTATIVA 2 (BYPASS): Importação direta forçada para garantir código novo
+                            // Isso garante que se o UI.js estiver velho, pegamos o renderer novo direto da fonte
+                            try {
+                                const { renderFinanceKPIs: freshRender } = await import(`./ui/financeRenderer.js${cacheBuster}&bypass=true`);
+                                freshRender(getAllTransactions(), userBankBalanceConfig, freshPending);
+                                console.log("✅ [MAIN] Renderização forçada via Direct Import aplicada.");
+                            } catch (err) {
+                                console.warn("⚠️ [MAIN] Falha ao forçar renderizador fresco:", err);
+                            }
                         }
                     }, 1500); 
 
@@ -253,8 +264,7 @@ async function main() {
                 }
             }
 
-            // ATUALIZAÇÃO DOS KPIS FINANCEIROS COM DEBOUNCE
-            // Agrupa múltiplas atualizações rápidas em uma só para garantir performance e precisão
+            // DEBOUNCE PARA EVITAR PISCADAS
             if (calculateTotalPendingRevenue) {
                 if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
                 
@@ -262,9 +272,8 @@ async function main() {
                     const { startDate, endDate } = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
                     
-                    // Atualiza silenciosamente apenas os números
                     UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
-                }, 200); // Espera 200ms após a última alteração para calcular
+                }, 200);
             }
         };
 
