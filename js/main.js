@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.4 - FINAL SYNC FIX)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.5 - UI PROXY INTERCEPTOR)
 // ========================================================
 
 async function main() {
@@ -68,7 +68,6 @@ async function main() {
         let partCounter = 0;
         let currentOptionType = ''; 
         
-        // Variáveis para controle de Debounce (Evitar recálculos excessivos e Race Conditions)
         let orderUpdateDebounce = null;
         let financeUpdateDebounce = null;
 
@@ -142,7 +141,6 @@ async function main() {
                             
                             console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
-                            // Importação direta forçada para garantir código novo
                             try {
                                 const { renderFinanceKPIs: freshRender } = await import(`./ui/financeRenderer.js${cacheBuster}&bypass=true`);
                                 freshRender(getAllTransactions(), userBankBalanceConfig, freshPending);
@@ -236,7 +234,6 @@ async function main() {
             return { startDate, endDate };
         };
 
-        // HANDLER DE PEDIDOS COM DEBOUNCE
         const handleOrderChange = (type, order, viewType) => {
             const isDelivered = order.orderStatus === 'Entregue';
 
@@ -265,21 +262,16 @@ async function main() {
 
             if (calculateTotalPendingRevenue) {
                 if (orderUpdateDebounce) clearTimeout(orderUpdateDebounce);
-                
                 orderUpdateDebounce = setTimeout(() => {
                     const { startDate, endDate } = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
-                    
                     UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
                 }, 200);
             }
         };
 
-        // HANDLER FINANCEIRO COM DEBOUNCE (A CORREÇÃO DO "ZERO")
         const handleFinanceChange = (type, transaction, config) => {
             const { startDate, endDate } = getCurrentDashboardDates();
-
-            // 1. Atualização Imediata da Lista (Responsividade Visual)
             const transactionDate = new Date(transaction.date + 'T00:00:00');
             let passesDateFilter = true;
             
@@ -302,20 +294,13 @@ async function main() {
                 }
             }
 
-            // 2. Atualização dos KPIs com DEBOUNCE (Para evitar Race Condition do "Zero")
             if (calculateTotalPendingRevenue) {
                 if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
-                
                 financeUpdateDebounce = setTimeout(() => {
-                    // Recalcula as datas DENTRO do timeout para garantir o estado mais atual
                     const currentDates = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(currentDates.startDate, currentDates.endDate);
-                    
-                    // Log de debug para provar que o debounce evitou o zero
-                    // console.log(`[DEBUG] Atualizando KPIs via FinanceHandler. Pendente: R$ ${pendingRevenue}`);
-                    
                     UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
-                }, 300); // 300ms de espera para garantir que tudo assentou
+                }, 300);
             }
         };
 
@@ -431,7 +416,6 @@ async function main() {
             const key = `lastAutoBackupTimestamp_${userCompanyId}`;
             const lastBackup = localStorage.getItem(key);
             const sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000;
-
             let needsReminder = false;
             
             if (!lastBackup) {
@@ -490,7 +474,38 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
-        initializeFinanceListeners(UI, {
+        // ==================================================================
+        // CORREÇÃO CRÍTICA v5.8.5: UI PROXY PARA FINANCE LISTENERS
+        // ==================================================================
+        // Criamos um Proxy da UI para interceptar chamadas do Listener.
+        // Se o Listener tentar pintar "R$ 0" quando sabemos que existem pedidos,
+        // nós bloqueamos e recalculamos com a lógica confiável do Main.
+        
+        const FinanceUIProxy = Object.create(UI);
+        FinanceUIProxy.renderFinanceDashboard = (transactions, config, pendingReceived) => {
+            let safePending = pendingReceived;
+            
+            // Se o listener mandou 0, mas temos pedidos na memória...
+            if (pendingReceived === 0) {
+                const ordersInMemory = getAllOrders ? getAllOrders() : [];
+                if (ordersInMemory.length > 0) {
+                    // Recalcula usando as datas confiáveis do Main (D.O.M.)
+                    const { startDate, endDate } = getCurrentDashboardDates();
+                    const recalcValue = calculateTotalPendingRevenue(startDate, endDate);
+                    
+                    // Se o recálculo achou dinheiro, usa ele!
+                    if (recalcValue > 0) {
+                        console.warn(`🛡️ [MAIN PROXY] Bloqueio de Reset Indevido! Listener enviou R$ 0, mas Main calculou R$ ${recalcValue}. Corrigindo...`);
+                        safePending = recalcValue;
+                    }
+                }
+            }
+            
+            // Passa para a UI real o valor corrigido
+            UI.renderFinanceDashboard(transactions, config, safePending);
+        };
+
+        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY AQUI
             services: {
                 saveTransaction,
                 deleteTransaction,
