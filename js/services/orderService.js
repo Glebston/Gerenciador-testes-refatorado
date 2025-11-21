@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.7.13 - Property Name Fix)
+// MÓDULO ORDER SERVICE (v5.7.14 - Audit & Detailed Logic)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -13,8 +13,13 @@ let unsubscribeListener = null;
 
 // --- Funções Auxiliares de Cálculo ---
 
+/**
+ * Conta a quantidade total de itens, suportando Grade Comum e Detalhada.
+ */
 const countPartItems = (part) => {
     let totalQty = 0;
+
+    // 1. Contagem para Grade Comum (Sizes Object)
     if (part.sizes && typeof part.sizes === 'object') {
         Object.values(part.sizes).forEach(sizesObj => {
             if (sizesObj && typeof sizesObj === 'object') {
@@ -24,6 +29,13 @@ const countPartItems = (part) => {
             }
         });
     }
+
+    // 2. Contagem para Grade Detalhada (Array de Detalhes)
+    // Se for do tipo detalhado, a quantidade é o número de linhas no array details
+    if (part.details && Array.isArray(part.details)) {
+        totalQty += part.details.length;
+    }
+
     return totalQty;
 };
 
@@ -31,7 +43,9 @@ const calculateOrderTotalValue = (order) => {
     let grossTotal = 0;
     if (order.parts && Array.isArray(order.parts)) {
         order.parts.forEach(part => {
-            const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || 0;
+            // Tenta pegar o preço específico, depois o padrão, ou assume 0
+            // Para peças detalhadas, geralmente usa-se unitPrice direto no objeto da peça ou standard
+            const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || parseFloat(part.unitPrice) || 0;
             const qty = countPartItems(part);
             grossTotal += (price * qty);
         });
@@ -101,41 +115,56 @@ export const getAllOrders = () => {
 
 /**
  * Calcula o valor total pendente (A Receber) com filtro ESTRITO de datas.
- * CORREÇÃO v5.7.13: Atualizado para ler a propriedade 'orderDate' correta.
+ * v5.7.14: Inclui Logs de Auditoria e Correção de Status Case-Insensitive.
  */
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
-    return allOrders.reduce((acc, order) => {
+    // [DEBUG] Inicia grupo de log para auditoria (apenas se houver datas definidas para não poluir demais)
+    const isAuditing = startDate || endDate;
+    if (isAuditing) console.groupCollapsed("💰 Auditoria de Cálculo A Receber");
+
+    const total = allOrders.reduce((acc, order) => {
         // 1. Verifica Status (Ignora Cancelados e Entregues)
-        const status = order.orderStatus ? order.orderStatus.trim() : '';
-        if (status === 'Cancelado' || status === 'Entregue') return acc;
+        // Correção: Normaliza para minúsculas para evitar erros de digitação (ex: "Entregue" vs "entregue")
+        const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
+        const status = rawStatus.toLowerCase();
+        
+        if (status === 'cancelado' || status === 'entregue') return acc;
 
         // 2. Verifica Filtro de Data
         if (startDate || endDate) {
-            // CORREÇÃO CRÍTICA AQUI:
-            // O formHandler prova que o nome do campo é 'orderDate'.
-            // Mantemos fallback para 'date' e 'createdAt' por segurança de legado.
             const orderDateStr = order.orderDate || order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
             
-            // Se não tem data legível, ignora para não poluir o mês errado.
-            if (!orderDateStr) return acc;
+            if (!orderDateStr) return acc; // Sem data, ignora
 
             const orderDate = new Date(orderDateStr + 'T00:00:00');
 
-            // Se a data for inválida, ignora.
-            if (isNaN(orderDate.getTime())) return acc;
+            if (isNaN(orderDate.getTime())) return acc; // Data inválida, ignora
             
             if (startDate && orderDate < startDate) return acc;
             if (endDate && orderDate > endDate) return acc;
         }
 
         // 3. Calcula Valores
-        const total = calculateOrderTotalValue(order);
+        const totalOrder = calculateOrderTotalValue(order);
         const paid = parseFloat(order.downPayment) || 0;
-        const remaining = total - paid;
+        const remaining = totalOrder - paid;
 
         // Só soma se houver valor positivo restante
-        return acc + (remaining > 0.01 ? remaining : 0);
+        if (remaining > 0.01) {
+            if (isAuditing) {
+                console.log(`Pedido ID: ${order.id} | Cliente: ${order.clientName} | Data: ${order.orderDate} | Resta: R$ ${remaining.toFixed(2)}`);
+            }
+            return acc + remaining;
+        }
+        return acc;
     }, 0);
+
+    if (isAuditing) {
+        console.log(`%cTOTAL CALCULADO: R$ ${total.toFixed(2)}`, "color: green; font-weight: bold; font-size: 14px;");
+        console.groupEnd();
+    }
+
+    return total;
 };
 
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
