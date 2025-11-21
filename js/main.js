@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.2 - CACHE BYPASS)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.4 - FINAL SYNC FIX)
 // ========================================================
 
 async function main() {
@@ -46,7 +46,6 @@ async function main() {
         const { initializePricingService, savePriceTableChanges, deletePriceItem, getAllPricingItems, cleanupPricingService } = await import(`./services/pricingService.js${cacheBuster}`);
         const { initializeIdleTimer } = await import(`./utils.js${cacheBuster}`);
         
-        // Importa a UI normalmente para o fluxo geral
         const UI = await import(`./ui.js${cacheBuster}`);
 
         const { initializeAuthListeners } = await import(`./listeners/authListeners.js${cacheBuster}`);
@@ -69,6 +68,8 @@ async function main() {
         let partCounter = 0;
         let currentOptionType = ''; 
         
+        // Variáveis para controle de Debounce (Evitar recálculos excessivos e Race Conditions)
+        let orderUpdateDebounce = null;
         let financeUpdateDebounce = null;
 
         const defaultOptions = {
@@ -141,17 +142,14 @@ async function main() {
                             
                             console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
-                            // TENTATIVA 1: Via UI Normal (pode estar cacheada)
-                            UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
-                            
-                            // TENTATIVA 2 (BYPASS): Importação direta forçada para garantir código novo
-                            // Isso garante que se o UI.js estiver velho, pegamos o renderer novo direto da fonte
+                            // Importação direta forçada para garantir código novo
                             try {
                                 const { renderFinanceKPIs: freshRender } = await import(`./ui/financeRenderer.js${cacheBuster}&bypass=true`);
                                 freshRender(getAllTransactions(), userBankBalanceConfig, freshPending);
                                 console.log("✅ [MAIN] Renderização forçada via Direct Import aplicada.");
                             } catch (err) {
-                                console.warn("⚠️ [MAIN] Falha ao forçar renderizador fresco:", err);
+                                console.warn("⚠️ [MAIN] Falha ao forçar renderizador fresco, usando padrão:", err);
+                                UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                             }
                         }
                     }, 1500); 
@@ -238,6 +236,7 @@ async function main() {
             return { startDate, endDate };
         };
 
+        // HANDLER DE PEDIDOS COM DEBOUNCE
         const handleOrderChange = (type, order, viewType) => {
             const isDelivered = order.orderStatus === 'Entregue';
 
@@ -264,11 +263,10 @@ async function main() {
                 }
             }
 
-            // DEBOUNCE PARA EVITAR PISCADAS
             if (calculateTotalPendingRevenue) {
-                if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
+                if (orderUpdateDebounce) clearTimeout(orderUpdateDebounce);
                 
-                financeUpdateDebounce = setTimeout(() => {
+                orderUpdateDebounce = setTimeout(() => {
                     const { startDate, endDate } = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
                     
@@ -277,12 +275,11 @@ async function main() {
             }
         };
 
+        // HANDLER FINANCEIRO COM DEBOUNCE (A CORREÇÃO DO "ZERO")
         const handleFinanceChange = (type, transaction, config) => {
             const { startDate, endDate } = getCurrentDashboardDates();
 
-            const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startDate, endDate) : 0;
-            UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
-            
+            // 1. Atualização Imediata da Lista (Responsividade Visual)
             const transactionDate = new Date(transaction.date + 'T00:00:00');
             let passesDateFilter = true;
             
@@ -297,13 +294,28 @@ async function main() {
                 if (type === 'modified' || type === 'removed') {
                     UI.removeTransactionRow(transaction.id);
                 }
-                return; 
+            } else {
+                switch (type) {
+                    case 'added': UI.addTransactionRow(transaction); break;
+                    case 'modified': UI.updateTransactionRow(transaction); break;
+                    case 'removed': UI.removeTransactionRow(transaction.id); break;
+                }
             }
 
-            switch (type) {
-                case 'added': UI.addTransactionRow(transaction); break;
-                case 'modified': UI.updateTransactionRow(transaction); break;
-                case 'removed': UI.removeTransactionRow(transaction.id); break;
+            // 2. Atualização dos KPIs com DEBOUNCE (Para evitar Race Condition do "Zero")
+            if (calculateTotalPendingRevenue) {
+                if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
+                
+                financeUpdateDebounce = setTimeout(() => {
+                    // Recalcula as datas DENTRO do timeout para garantir o estado mais atual
+                    const currentDates = getCurrentDashboardDates();
+                    const pendingRevenue = calculateTotalPendingRevenue(currentDates.startDate, currentDates.endDate);
+                    
+                    // Log de debug para provar que o debounce evitou o zero
+                    // console.log(`[DEBUG] Atualizando KPIs via FinanceHandler. Pendente: R$ ${pendingRevenue}`);
+                    
+                    UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
+                }, 300); // 300ms de espera para garantir que tudo assentou
             }
         };
 
