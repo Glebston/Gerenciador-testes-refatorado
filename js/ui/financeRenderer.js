@@ -1,15 +1,13 @@
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v4.5.1)
+// MÓDULO FINANCE RENDERER (v5.7.19 - VISUAL FIX)
 // Responsabilidade: Gerenciar a renderização de tudo 
-// relacionado ao Dashboard Financeiro: KPIs, Gráficos e 
-// a lista de transações.
+// relacionado ao Dashboard Financeiro.
 // ==========================================================
 
 import { DOM } from './dom.js';
 
 /**
- * Cria o HTML para uma única linha de transação (mas não a insere)
- * @returns {string} String HTML da <tr>
+ * Cria o HTML para uma única linha de transação
  */
 const generateTransactionRowHTML = (t) => {
     const isIncome = t.type === 'income';
@@ -25,18 +23,15 @@ const generateTransactionRowHTML = (t) => {
     const isLinkedToOrder = !!t.orderId;
     let actionsHtml = '';
 
-    // v5.7.1: Permite "Receber" em qualquer transação "A Receber" (removido check !isLinkedToOrder)
     if (isReceivable) { 
         actionsHtml = `<button data-id="${t.id}" class="mark-as-paid-btn text-green-600 hover:underline text-sm font-semibold">Receber</button> `;
     }
 
-    // v5.7.1: Sempre exibe os botões de Editar/Excluir
     actionsHtml += `
         <button data-id="${t.id}" class="edit-transaction-btn text-blue-500 hover:underline text-sm">Editar</button>
         <button data-id="${t.id}" class="delete-transaction-btn text-red-500 hover:underline text-sm ml-2">Excluir</button>
     `;
 
-    // v5.7.1: Se estiver vinculado ao pedido, apenas adiciona uma tag visual, mas mantém os botões.
     if (isLinkedToOrder) {
         actionsHtml += `<span class="block text-xs text-gray-500 italic mt-1" title="Vinculado ao Pedido ID: ${t.orderId}">Lançado via Pedido</span>`;
     }
@@ -55,9 +50,6 @@ const generateTransactionRowHTML = (t) => {
     `;
 };
 
-/**
- * Adiciona uma linha de transação à tabela
- */
 export const addTransactionRow = (transaction) => {
     const tr = document.createElement('tr');
     tr.className = `border-b hover:bg-gray-50 ${transaction.status === 'a_receber' ? 'bg-yellow-50' : ''}`;
@@ -65,7 +57,6 @@ export const addTransactionRow = (transaction) => {
     tr.dataset.date = transaction.date;
     tr.innerHTML = generateTransactionRowHTML(transaction);
 
-    // Insere ordenado por data (mais novo primeiro)
     const allRows = Array.from(DOM.transactionsList.querySelectorAll('tr[data-id]'));
     let inserted = false;
     for (const existingRow of allRows) {
@@ -79,21 +70,15 @@ export const addTransactionRow = (transaction) => {
         DOM.transactionsList.appendChild(tr);
     }
     
-    // Remove placeholder se existir
     const placeholder = DOM.transactionsList.querySelector('.transactions-placeholder');
     if (placeholder) placeholder.remove();
 };
 
-/**
- * Atualiza uma linha de transação existente
- */
 export const updateTransactionRow = (transaction) => {
     const row = DOM.transactionsList.querySelector(`tr[data-id="${transaction.id}"]`);
     if (row) {
-        // Apenas atualiza o conteúdo e as classes
         row.className = `border-b hover:bg-gray-50 ${transaction.status === 'a_receber' ? 'bg-yellow-50' : ''}`;
         row.innerHTML = generateTransactionRowHTML(transaction);
-        // Remove e readiciona para garantir a ordenação correta
         const oldDate = row.dataset.date;
         if (transaction.date !== oldDate) {
             row.remove();
@@ -102,32 +87,23 @@ export const updateTransactionRow = (transaction) => {
     }
 };
 
-/**
- * Remove uma linha de transação da tabela
- */
 export const removeTransactionRow = (transactionId) => {
     const row = DOM.transactionsList.querySelector(`tr[data-id="${transactionId}"]`);
     if (row) {
         row.remove();
     }
-    
-    // Mostra placeholder se a lista ficar vazia
     if (DOM.transactionsList.children.length === 0) {
         showTransactionsPlaceholder(false);
     }
 };
 
-/**
- * Exibe a mensagem de "Nenhum lançamento"
- */
 const showTransactionsPlaceholder = (isSearch) => {
     const message = isSearch ? 'Nenhum lançamento encontrado para a busca.' : 'Nenhum lançamento encontrado para este período.';
     DOM.transactionsList.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500 transactions-placeholder">${message}</td></tr>`;
 };
 
 /**
- * Renderiza apenas os KPIs (cards superiores) do dashboard financeiro
- * v4.5.1: Adicionado parâmetro opcional 'pendingOrdersValue' para somar ao A Receber.
+ * Renderiza apenas os KPIs (cards superiores)
  */
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     const filterValue = DOM.periodFilter.value;
@@ -152,18 +128,21 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     }
     
+    // Se as datas falharem, assume este mês como fallback de segurança
+    if (!startDate || !endDate) {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+
     const filteredTransactions = allTransactions.filter(t => {
         const transactionDate = new Date(t.date + 'T00:00:00');
         if (startDate && endDate) return transactionDate >= startDate && transactionDate <= endDate;
-        if(startDate && !endDate) return transactionDate >= startDate;
-        if(!startDate && endDate) return transactionDate <= endDate;
         return true;
     });
 
-    // v4.2.5: Separação de bankFlow e cashFlow
     let faturamentoBruto = 0, despesasTotais = 0, contasARReceber = 0, valorRecebido = 0;
-    let bankFlow = 0; // Fluxo do Banco
-    let cashFlow = 0; // Fluxo do Caixa (Dinheiro em Mãos)
+    let bankFlow = 0;
+    let cashFlow = 0;
 
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
@@ -178,46 +157,40 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
             despesasTotais += amount;
         }
         
-        // Separa o fluxo de caixa (caixa) do fluxo de banco (banco ou indefinido)
         if (t.source === 'caixa') {
-            if (t.type === 'income' && t.status !== 'a_receber') {
-                cashFlow += amount;
-            } else if (t.type === 'expense') {
-                cashFlow -= amount;
-            }
-        } else { // 'banco' ou undefined (legado)
-            if (t.type === 'income' && t.status !== 'a_receber') {
-                bankFlow += amount;
-            } else if (t.type === 'expense') {
-                bankFlow -= amount;
-            }
+            if (t.type === 'income' && t.status !== 'a_receber') cashFlow += amount;
+            else if (t.type === 'expense') cashFlow -= amount;
+        } else { 
+            if (t.type === 'income' && t.status !== 'a_receber') bankFlow += amount;
+            else if (t.type === 'expense') bankFlow -= amount;
         }
     });
 
-    // v4.5.1: Soma o valor pendente dos pedidos ao KPI de Contas a Receber
-    // Nota: Só somamos isso se o filtro não for específico (ou se a lógica de negócio permitir).
-    // Por padrão, somamos ao total geral do período visualizado.
-    contasARReceber += (parseFloat(pendingOrdersValue) || 0);
+    // CORREÇÃO CRÍTICA: Soma o valor pendente dos pedidos ao KPI
+    // Força a conversão para float para garantir que não concatene strings
+    const pendingValueFloat = parseFloat(pendingOrdersValue) || 0;
+    contasARReceber += pendingValueFloat;
 
     const lucroLiquido = valorRecebido - despesasTotais;
-    // Saldo em Conta (Banco) = Saldo Inicial + Fluxo do Banco
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
-    // Saldo em Caixa (Mãos) = Apenas o Fluxo do Caixa (não usa saldo inicial)
     const saldoEmCaixa = cashFlow;
 
+    // Atualização do DOM
     DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
     DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
+    
+    // AQUI A MÁGICA: Garantimos que o valor calculado seja exibido
     DOM.contasAReceber.textContent = `R$ ${contasARReceber.toFixed(2)}`;
+    
     DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
     DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
     DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
     
+    // Renderiza categorias (Top Despesas/Receitas)
     const expenseCategories = {}, incomeCategories = {};
-
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
         const category = t.category || 'Sem Categoria';
-
         if (t.type === 'expense') {
             if (!expenseCategories[category]) expenseCategories[category] = 0;
             expenseCategories[category] += amount;
@@ -256,30 +229,22 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     return filteredTransactions;
 };
 
-/**
- * Função principal de renderização do dashboard financeiro (para carga inicial ou filtros)
- * v4.5.1: Adicionado parâmetro opcional 'pendingOrdersValue'.
- */
 export const renderFinanceDashboard = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     if (!DOM.periodFilter) return;
 
-    // 1. Renderiza os KPIs e obtém as transações filtradas
     const filteredTransactions = renderFinanceKPIs(allTransactions, userBankBalanceConfig, pendingOrdersValue);
 
-    // 2. Filtra por busca
     const searchTerm = DOM.transactionSearchInput.value.toLowerCase();
     const displayTransactions = searchTerm ?
         filteredTransactions.filter(t => t.description.toLowerCase().includes(searchTerm)) :
         filteredTransactions;
         
-    // 3. Renderiza a lista de transações (apenas na carga inicial/filtro)
-    DOM.transactionsList.innerHTML = ''; // Limpa a lista
+    DOM.transactionsList.innerHTML = ''; 
     if (displayTransactions.length === 0) {
         showTransactionsPlaceholder(searchTerm.length > 0);
         return;
     }
     
-    // Ordena por data (mais novo primeiro)
     displayTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
     displayTransactions.forEach(addTransactionRow);
 };
