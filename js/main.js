@@ -1,11 +1,10 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.5 - UI PROXY INTERCEPTOR)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.6 - AGGRESSIVE PROXY)
 // ========================================================
 
 async function main() {
     
-    // Cache Buster Global
     const cacheBuster = `?v=${new Date().getTime()}`;
 
     try {
@@ -129,7 +128,7 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH (1500ms) - COM BYPASS DE CACHE VISUAL ---
+                    // --- SAFETY REFRESH (1500ms) ---
                     setTimeout(async () => {
                         console.log("⏰ [MAIN] Safety Refresh (1500ms)...");
                         
@@ -146,7 +145,6 @@ async function main() {
                                 freshRender(getAllTransactions(), userBankBalanceConfig, freshPending);
                                 console.log("✅ [MAIN] Renderização forçada via Direct Import aplicada.");
                             } catch (err) {
-                                console.warn("⚠️ [MAIN] Falha ao forçar renderizador fresco, usando padrão:", err);
                                 UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                             }
                         }
@@ -475,37 +473,31 @@ async function main() {
         });
 
         // ==================================================================
-        // CORREÇÃO CRÍTICA v5.8.5: UI PROXY PARA FINANCE LISTENERS
+        // CORREÇÃO CRÍTICA v5.8.6: PROXY AUTORITÁRIO (AGGRESSIVE OVERRIDE)
         // ==================================================================
-        // Criamos um Proxy da UI para interceptar chamadas do Listener.
-        // Se o Listener tentar pintar "R$ 0" quando sabemos que existem pedidos,
-        // nós bloqueamos e recalculamos com a lógica confiável do Main.
         
         const FinanceUIProxy = Object.create(UI);
         FinanceUIProxy.renderFinanceDashboard = (transactions, config, pendingReceived) => {
-            let safePending = pendingReceived;
+            // AQUI ESTÁ A MUDANÇA: IGNORAMOS O CÁLCULO DO LISTENER
+            // O Listener (listeners/financeListeners.js) pode ter calculado 0 por falta de contexto/dados.
+            // Nós (Main) somos a fonte da verdade. Vamos recalcular AGORA com os dados reais.
             
-            // Se o listener mandou 0, mas temos pedidos na memória...
-            if (pendingReceived === 0) {
-                const ordersInMemory = getAllOrders ? getAllOrders() : [];
-                if (ordersInMemory.length > 0) {
-                    // Recalcula usando as datas confiáveis do Main (D.O.M.)
-                    const { startDate, endDate } = getCurrentDashboardDates();
-                    const recalcValue = calculateTotalPendingRevenue(startDate, endDate);
-                    
-                    // Se o recálculo achou dinheiro, usa ele!
-                    if (recalcValue > 0) {
-                        console.warn(`🛡️ [MAIN PROXY] Bloqueio de Reset Indevido! Listener enviou R$ 0, mas Main calculou R$ ${recalcValue}. Corrigindo...`);
-                        safePending = recalcValue;
-                    }
-                }
+            const { startDate, endDate } = getCurrentDashboardDates();
+            const authoritativePending = calculateTotalPendingRevenue(startDate, endDate);
+            
+            // Se houver divergência, logamos para confirmação
+            if (Math.abs(authoritativePending - pendingReceived) > 0.01) {
+                console.log(`🛡️ [PROXY AUTORITÁRIO] Sobrescrevendo cálculo do Listener. Listener: ${pendingReceived} -> Main: ${authoritativePending}`);
             }
+
+            // Usamos o nosso valor (se tivermos dados), caso contrário usamos o do listener como fallback
+            const finalPending = authoritativePending > 0 ? authoritativePending : pendingReceived;
             
-            // Passa para a UI real o valor corrigido
-            UI.renderFinanceDashboard(transactions, config, safePending);
+            // Passa para a UI real o valor corrigido e blindado
+            UI.renderFinanceDashboard(transactions, config, finalPending);
         };
 
-        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY AQUI
+        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY AUTORITÁRIO
             services: {
                 saveTransaction,
                 deleteTransaction,
