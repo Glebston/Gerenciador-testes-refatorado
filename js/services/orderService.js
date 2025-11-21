@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.7.12 - Strict Filter)
+// MÓDULO ORDER SERVICE (v5.7.13 - Property Name Fix)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -101,27 +101,27 @@ export const getAllOrders = () => {
 
 /**
  * Calcula o valor total pendente (A Receber) com filtro ESTRITO de datas.
- * Correção Crítica: Se o pedido não tiver data válida e houver filtro ativo, ele é ignorado.
+ * CORREÇÃO v5.7.13: Atualizado para ler a propriedade 'orderDate' correta.
  */
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     return allOrders.reduce((acc, order) => {
         // 1. Verifica Status (Ignora Cancelados e Entregues)
-        // Uso de trim() para evitar erros com espaços em branco ("Entregue ")
         const status = order.orderStatus ? order.orderStatus.trim() : '';
         if (status === 'Cancelado' || status === 'Entregue') return acc;
 
         // 2. Verifica Filtro de Data
         if (startDate || endDate) {
-            // Tenta obter a data do pedido (date ou createdAt)
-            const orderDateStr = order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
+            // CORREÇÃO CRÍTICA AQUI:
+            // O formHandler prova que o nome do campo é 'orderDate'.
+            // Mantemos fallback para 'date' e 'createdAt' por segurança de legado.
+            const orderDateStr = order.orderDate || order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
             
-            // CORREÇÃO: Se não tem data, não podemos saber se pertence ao mês. 
-            // Por segurança, IGNORAMOS para não sujar o KPI do mês atual com lixo antigo.
+            // Se não tem data legível, ignora para não poluir o mês errado.
             if (!orderDateStr) return acc;
 
             const orderDate = new Date(orderDateStr + 'T00:00:00');
 
-            // CORREÇÃO: Se a data for inválida (NaN), ignora o pedido
+            // Se a data for inválida, ignora.
             if (isNaN(orderDate.getTime())) return acc;
             
             if (startDate && orderDate < startDate) return acc;
@@ -133,7 +133,7 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
         const paid = parseFloat(order.downPayment) || 0;
         const remaining = total - paid;
 
-        // Só soma se houver valor positivo restante (> 0.01 para evitar erros de arredondamento)
+        // Só soma se houver valor positivo restante
         return acc + (remaining > 0.01 ? remaining : 0);
     }, 0);
 };
