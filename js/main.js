@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.17 - AUDITORIA DE INICIALIZAÇÃO)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.7.18 - FORCE SYNC)
 // ========================================================
 
 async function main() {
@@ -96,6 +96,12 @@ async function main() {
                 }
                 UI.DOM.userEmail.textContent = userCompanyName;
                 
+                // --- CORREÇÃO DE SINCRONIA VISUAL ---
+                // Força o select a mostrar "Este Mês" visualmente e logica para garantir alinhamento
+                if (UI.DOM.periodFilter) {
+                    UI.DOM.periodFilter.value = 'thisMonth';
+                }
+
                 // --- INICIALIZAÇÃO REATIVA ---
                 console.log("🔌 [MAIN] Conectando serviços...");
                 initializeOrderService(userCompanyId, handleOrderChange, () => currentOrdersView);
@@ -108,7 +114,7 @@ async function main() {
                 const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
-                console.log(`🎨 [MAIN] Render inicial (antes dos dados). Pendente Calculado: R$ ${pendingRevenue}`);
+                console.log(`🎨 [MAIN] Render inicial. Pendente Calculado: R$ ${pendingRevenue}`);
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
                 UI.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, pendingRevenue);
@@ -121,14 +127,17 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH COM LOG ---
+                    // --- SAFETY REFRESH TURBINADO ---
                     setTimeout(() => {
                         console.log("⏰ [MAIN] Disparando Safety Refresh (800ms)...");
+                        // Garante novamente que o filtro está certo
+                        if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
+                        
                         if (calculateTotalPendingRevenue) {
                             const dates = getCurrentDashboardDates(); 
-                            console.log("📅 [MAIN] Datas lidas no Refresh:", dates);
+                            console.log("📅 [MAIN] Refresh usando datas:", dates.startDate?.toLocaleDateString(), "até", dates.endDate?.toLocaleDateString());
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
-                            console.log(`💰 [MAIN] Pendente no Refresh: R$ ${freshPending}`);
+                            console.log(`💰 [MAIN] Pendente Pós-Refresh: R$ ${freshPending}`);
                             UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
                         }
                     }, 800); 
@@ -182,6 +191,7 @@ async function main() {
             }
             
             let filter = UI.DOM.periodFilter.value;
+            // Força padrão se vazio
             if (!filter) filter = 'thisMonth'; 
 
             const now = new Date();
@@ -214,9 +224,6 @@ async function main() {
         };
 
         const handleOrderChange = (type, order, viewType) => {
-            // [DEBUG LOG] Monitorando a chegada de pedidos
-            // console.log(`📦 [HANDLER] Pedido alterado/adicionado: ${type} - ID: ${order.id}`);
-
             const isDelivered = order.orderStatus === 'Entregue';
 
             if (viewType === 'pending') {
@@ -244,12 +251,13 @@ async function main() {
 
             // ATUALIZAÇÃO DOS KPIS FINANCEIROS
             if (calculateTotalPendingRevenue) {
+                // [AUDITORIA DE DATA]
                 const { startDate, endDate } = getCurrentDashboardDates();
+                
+                // Log para verificar se as datas estão chegando corretas na hora que o pedido entra
+                // console.log(`🔄 [HANDLER] Pedido chegou. Recalculando para: ${startDate?.toLocaleDateString()} até ${endDate?.toLocaleDateString()}`);
+                
                 const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
-                
-                // [DEBUG LOG] Apenas descomente se quiser ver o cálculo a cada pedido (pode poluir muito)
-                // console.log(`💰 [HANDLER] Recalculando Pendente: R$ ${pendingRevenue}`);
-                
                 UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
             }
         };
