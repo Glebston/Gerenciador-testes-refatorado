@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.8.6 - AGGRESSIVE PROXY)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.9.0 - STATE CACHE FINAL)
 // ========================================================
 
 async function main() {
@@ -70,6 +70,11 @@ async function main() {
         let orderUpdateDebounce = null;
         let financeUpdateDebounce = null;
 
+        // --- CACHE DE ESTADO (A SOLUÇÃO DEFINITIVA) ---
+        // Armazena o último valor válido calculado para evitar "piscadas" de zero
+        let globalPendingRevenueCache = 0;
+        let lastFilterValue = 'thisMonth';
+
         const defaultOptions = {
             partTypes: ['Gola redonda manga curta', 'Gola redonda manga longa', 'Gola redonda manga longa com capuz', 'Gola redonda manga curta (sublimada na frente)', 'Gola polo manga curta', 'Gola polo manga longa', 'Gola V manga curta', 'Gola V manga longa', 'Short', 'Calça'],
             materialTypes: ['Malha fria', 'Drifity', 'Cacharrel', 'PP', 'Algodão Fio 30', 'TNT drive', 'Piquê', 'Brim']
@@ -138,6 +143,9 @@ async function main() {
                             const dates = getCurrentDashboardDates(); 
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
                             
+                            // Atualiza o cache se tiver valor
+                            if (freshPending > 0) globalPendingRevenueCache = freshPending;
+
                             console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
                             try {
@@ -198,6 +206,13 @@ async function main() {
             
             let filter = UI.DOM.periodFilter.value;
             if (!filter) filter = 'thisMonth'; 
+
+            // Zera o cache se o filtro mudou de verdade
+            if (filter !== lastFilterValue) {
+                console.log(`🔄 [MAIN] Filtro mudou de ${lastFilterValue} para ${filter}. Resetando cache.`);
+                globalPendingRevenueCache = 0;
+                lastFilterValue = filter;
+            }
 
             let startDate = null, endDate = null;
 
@@ -263,6 +278,7 @@ async function main() {
                 orderUpdateDebounce = setTimeout(() => {
                     const { startDate, endDate } = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
+                    if (pendingRevenue > 0) globalPendingRevenueCache = pendingRevenue;
                     UI.renderFinanceKPIs(getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
                 }, 200);
             }
@@ -297,6 +313,7 @@ async function main() {
                 financeUpdateDebounce = setTimeout(() => {
                     const currentDates = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(currentDates.startDate, currentDates.endDate);
+                    if (pendingRevenue > 0) globalPendingRevenueCache = pendingRevenue;
                     UI.renderFinanceKPIs(getAllTransactions(), config, pendingRevenue);
                 }, 300);
             }
@@ -473,31 +490,42 @@ async function main() {
         });
 
         // ==================================================================
-        // CORREÇÃO CRÍTICA v5.8.6: PROXY AUTORITÁRIO (AGGRESSIVE OVERRIDE)
+        // CORREÇÃO CRÍTICA v5.9.0: PROXY AUTORITÁRIO COM CACHE DE ESTADO
         // ==================================================================
+        // Esta é a solução definitiva para o problema de "Ghost Updates".
+        // O Proxy agora possui memória (globalPendingRevenueCache).
+        // Se o cálculo do Listener falhar (retornar 0 por data/sync),
+        // nós usamos o valor do cache se ele existir.
         
         const FinanceUIProxy = Object.create(UI);
         FinanceUIProxy.renderFinanceDashboard = (transactions, config, pendingReceived) => {
-            // AQUI ESTÁ A MUDANÇA: IGNORAMOS O CÁLCULO DO LISTENER
-            // O Listener (listeners/financeListeners.js) pode ter calculado 0 por falta de contexto/dados.
-            // Nós (Main) somos a fonte da verdade. Vamos recalcular AGORA com os dados reais.
             
             const { startDate, endDate } = getCurrentDashboardDates();
             const authoritativePending = calculateTotalPendingRevenue(startDate, endDate);
             
-            // Se houver divergência, logamos para confirmação
-            if (Math.abs(authoritativePending - pendingReceived) > 0.01) {
-                console.log(`🛡️ [PROXY AUTORITÁRIO] Sobrescrevendo cálculo do Listener. Listener: ${pendingReceived} -> Main: ${authoritativePending}`);
+            // 1. Atualiza o cache se tivermos um cálculo positivo confiável
+            if (authoritativePending > 0) {
+                globalPendingRevenueCache = authoritativePending;
             }
 
-            // Usamos o nosso valor (se tivermos dados), caso contrário usamos o do listener como fallback
-            const finalPending = authoritativePending > 0 ? authoritativePending : pendingReceived;
+            let finalPending = authoritativePending;
+
+            // 2. Lógica de Resgate:
+            // Se o cálculo atual deu ZERO, mas temos dinheiro no cache e o filtro não mudou...
+            // Assumimos que é um erro de sincronização e usamos o cache.
+            if (finalPending <= 0.01 && globalPendingRevenueCache > 0) {
+                 console.log(`🛡️ [CACHE RESCUE] Evitando piscada de zero! Usando cache: R$ ${globalPendingRevenueCache}`);
+                 finalPending = globalPendingRevenueCache;
+            } else if (finalPending <= 0.01 && pendingReceived > 0) {
+                // Se por algum milagre o listener mandou valor e o main não, usa o listener
+                finalPending = pendingReceived;
+            }
             
-            // Passa para a UI real o valor corrigido e blindado
+            // Passa para a UI real o valor estabilizado
             UI.renderFinanceDashboard(transactions, config, finalPending);
         };
 
-        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY AUTORITÁRIO
+        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY COM CACHE
             services: {
                 saveTransaction,
                 deleteTransaction,
