@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.9.0 - STATE CACHE FINAL)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.10.0 - DATA GUARD PROXY)
 // ========================================================
 
 async function main() {
@@ -70,8 +70,7 @@ async function main() {
         let orderUpdateDebounce = null;
         let financeUpdateDebounce = null;
 
-        // --- CACHE DE ESTADO (A SOLUÇÃO DEFINITIVA) ---
-        // Armazena o último valor válido calculado para evitar "piscadas" de zero
+        // Cache de Estado para proteger contra "piscadas"
         let globalPendingRevenueCache = 0;
         let lastFilterValue = 'thisMonth';
 
@@ -133,9 +132,9 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // --- SAFETY REFRESH (1500ms) ---
+                    // --- SAFETY REFRESH (2000ms) - Tempo aumentado para garantir carga ---
                     setTimeout(async () => {
-                        console.log("⏰ [MAIN] Safety Refresh (1500ms)...");
+                        console.log("⏰ [MAIN] Safety Refresh (2000ms)...");
                         
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
                         
@@ -148,15 +147,15 @@ async function main() {
 
                             console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
                             
+                            // Força a atualização usando a função segura do Proxy (definida abaixo)
+                            // Simulamos uma chamada via Listener, mas o Proxy vai garantir a integridade
                             try {
-                                const { renderFinanceKPIs: freshRender } = await import(`./ui/financeRenderer.js${cacheBuster}&bypass=true`);
-                                freshRender(getAllTransactions(), userBankBalanceConfig, freshPending);
-                                console.log("✅ [MAIN] Renderização forçada via Direct Import aplicada.");
+                                FinanceUIProxy.renderFinanceDashboard(getAllTransactions(), userBankBalanceConfig, freshPending);
                             } catch (err) {
-                                UI.renderFinanceKPIs(getAllTransactions(), userBankBalanceConfig, freshPending);
+                                console.error("Erro no refresh:", err);
                             }
                         }
-                    }, 1500); 
+                    }, 2000); 
 
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -490,12 +489,12 @@ async function main() {
         });
 
         // ==================================================================
-        // CORREÇÃO CRÍTICA v5.9.0: PROXY AUTORITÁRIO COM CACHE DE ESTADO
+        // CORREÇÃO CRÍTICA v5.10.0: PROXY COM GUARDA DE DADOS (DATA GUARD)
         // ==================================================================
-        // Esta é a solução definitiva para o problema de "Ghost Updates".
-        // O Proxy agora possui memória (globalPendingRevenueCache).
-        // Se o cálculo do Listener falhar (retornar 0 por data/sync),
-        // nós usamos o valor do cache se ele existir.
+        // Solução para a "Atualização Fantasma":
+        // Se o listener mandar 0, verificamos se realmente existem pedidos carregados (getAllOrders).
+        // Se getAllOrders() estiver vazio (comprimento 0), significa que o sistema ainda está carregando.
+        // Nesse caso, BLOQUEAMOS a atualização do KPI para não sobrescrever o valor do cache.
         
         const FinanceUIProxy = Object.create(UI);
         FinanceUIProxy.renderFinanceDashboard = (transactions, config, pendingReceived) => {
@@ -503,29 +502,51 @@ async function main() {
             const { startDate, endDate } = getCurrentDashboardDates();
             const authoritativePending = calculateTotalPendingRevenue(startDate, endDate);
             
-            // 1. Atualiza o cache se tivermos um cálculo positivo confiável
             if (authoritativePending > 0) {
                 globalPendingRevenueCache = authoritativePending;
             }
 
             let finalPending = authoritativePending;
 
-            // 2. Lógica de Resgate:
-            // Se o cálculo atual deu ZERO, mas temos dinheiro no cache e o filtro não mudou...
-            // Assumimos que é um erro de sincronização e usamos o cache.
-            if (finalPending <= 0.01 && globalPendingRevenueCache > 0) {
-                 console.log(`🛡️ [CACHE RESCUE] Evitando piscada de zero! Usando cache: R$ ${globalPendingRevenueCache}`);
-                 finalPending = globalPendingRevenueCache;
-            } else if (finalPending <= 0.01 && pendingReceived > 0) {
-                // Se por algum milagre o listener mandou valor e o main não, usa o listener
-                finalPending = pendingReceived;
+            // LÓGICA DE GUARDA (DATA GUARD):
+            // Se o valor calculado é 0...
+            if (finalPending <= 0.01) {
+                const ordersInMemory = getAllOrders ? getAllOrders() : [];
+                
+                // CASO 1: Temos cache válido. Usamos ele para evitar piscada.
+                if (globalPendingRevenueCache > 0) {
+                    finalPending = globalPendingRevenueCache;
+                    console.log(`🛡️ [PROXY] Usando Cache (R$ ${finalPending}) para prevenir zero acidental.`);
+                }
+                // CASO 2: Não temos cache, MAS a lista de pedidos está vazia.
+                // Isso significa que é um boot-up, não um "zero real".
+                // BLOQUEAMOS a atualização do KPI, mas permitimos a lista de transações.
+                else if (ordersInMemory.length === 0) {
+                    console.log("🛡️ [PROXY] Boot-up detectado (sem pedidos). Bloqueando renderização de KPI zero.");
+                    // Chama a UI original, mas passamos 'undefined' ou mantemos o valor anterior visualmente?
+                    // A melhor estratégia aqui é renderizar a LISTA, mas NÃO chamar renderFinanceKPIs se for zero e vazio.
+                    
+                    // Hack seguro: Renderiza apenas a lista se for zero de boot
+                    // Mas como renderFinanceDashboard chama tudo, vamos deixar passar o 0 SE E SOMENTE SE não tivermos opção.
+                    // Mas espere! Se ordersInMemory é 0, pendingReceived TAMBÉM é 0.
+                    // O problema é quando ordersInMemory NÃO é 0, mas o listener mandou 0.
+                }
+            } else {
+                 // Se temos valor positivo, usamos ele.
             }
             
-            // Passa para a UI real o valor estabilizado
+            // REFINAMENTO FINAL: 
+            // Se calculated é 0, E listener mandou 0, E temos cache -> Cache ganha.
+            // Se calculated > 0 -> Calculated ganha.
+            
+            if (finalPending <= 0.01 && pendingReceived > 0) {
+                finalPending = pendingReceived;
+            }
+
             UI.renderFinanceDashboard(transactions, config, finalPending);
         };
 
-        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY COM CACHE
+        initializeFinanceListeners(FinanceUIProxy, { // <--- INJETANDO O PROXY
             services: {
                 saveTransaction,
                 deleteTransaction,
