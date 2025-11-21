@@ -1,3 +1,8 @@
+// js/services/orderService.js
+// ==========================================================
+// MÓDULO ORDER SERVICE (v4.5.1 - Patch Financeiro)
+// ==========================================================
+
 // Importa as funções necessárias do Firestore
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -110,24 +115,33 @@ export const getAllOrders = () => {
 };
 
 /**
- * Calcula o valor total pendente (A Receber).
- * Lógica Ajustada: Ignora pedidos Cancelados E pedidos Entregues.
+ * Calcula o valor total pendente (A Receber) dentro de um período.
+ * v5.7.10: Adicionado suporte a filtro de datas (startDate, endDate).
+ * Se as datas forem nulas, calcula de todo o período (comportamento original).
  */
-export const calculateTotalPendingRevenue = () => {
+export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     return allOrders.reduce((acc, order) => {
-        // Verifica o status usando a propriedade correta 'orderStatus'
+        // 1. Verifica Status (Ignora Cancelados e Entregues)
         const status = order.orderStatus || '';
-        
-        // Se estiver Cancelado ou Entregue, não conta como receita pendente
         if (status === 'Cancelado' || status === 'Entregue') return acc;
 
-        // 1. Calcula o Total Real
+        // 2. Verifica Filtro de Data (Se fornecido)
+        if (startDate || endDate) {
+            // Tenta usar order.date (YYYY-MM-DD) ou order.createdAt
+            // Ajuste para garantir compatibilidade com string ou Date object
+            const orderDateStr = order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
+            
+            if (orderDateStr) {
+                const orderDate = new Date(orderDateStr + 'T00:00:00');
+                
+                if (startDate && orderDate < startDate) return acc;
+                if (endDate && orderDate > endDate) return acc;
+            }
+        }
+
+        // 3. Calcula Valores
         const total = calculateOrderTotalValue(order);
-
-        // 2. Lê o valor pago
         const paid = parseFloat(order.downPayment) || 0;
-
-        // 3. Saldo Devedor
         const remaining = total - paid;
 
         // Só soma se houver valor positivo restante
