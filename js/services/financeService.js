@@ -1,30 +1,30 @@
 // js/services/financeService.js
 // ==========================================================
-// MÓDULO FINANCE SERVICE (v5.12.0 - BATCHED UPDATES)
+// MÓDULO FINANCE SERVICE (v5.13.0 - BATCHED & SANITIZED)
 // ==========================================================
 
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, writeBatch, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from '../firebaseConfig.js';
 
 // --- Estado do Módulo ---
-let transactionsCollection = null; 
-let companyRef = null;             
-let allTransactions = [];          
-let unsubscribeListener = null;    
+let dbCollection = null;
+let allTransactions = [];
+let unsubscribeListener = null;
 
-// --- Funções Privadas ---
+// --- Funções Privadas do Firestore ---
 
-const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig) => {
+const setupFirestoreListener = (granularUpdateCallback, getConfigCallback) => {
     if (unsubscribeListener) unsubscribeListener();
 
-    const q = query(transactionsCollection);
+    const q = query(dbCollection);
     
     unsubscribeListener = onSnapshot(q, (snapshot) => {
         let hasChanges = false;
-        let lastChangeType = 'modified'; // Default fallback
+        let lastChangeType = 'modified';
         let lastChangedData = null;
 
-        // 1. Processa todas as mudanças no Cache Local PRIMEIRO
+        // 1. Processamento em Lote (Batching)
+        // Evita disparar eventos para cada transação durante o carregamento inicial
         snapshot.docChanges().forEach((change) => {
             hasChanges = true;
             const data = { id: change.doc.id, ...change.doc.data() };
@@ -39,119 +39,92 @@ const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig)
                 if (index > -1) allTransactions.splice(index, 1);
             }
             
-            // Guarda referência da última mudança para passar ao callback
             lastChangeType = change.type;
             lastChangedData = data;
         });
-        
-        // 2. Só avisa o Main.js SE houve mudanças e DEPOIS de processar tudo
+
+        // 2. Notificação Consolidada
+        // Só avisa o main.js depois de processar todas as mudanças do snapshot atual
         if (hasChanges) {
-            // Ordena o cache antes de notificar
-            allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
             if (granularUpdateCallback) {
-                granularUpdateCallback(lastChangeType, lastChangedData, getBankBalanceConfig());
+                // Passamos null no segundo argumento se for um batch grande, 
+                // ou o lastChangedData se for uma edição pontual (o main.js lida com isso)
+                granularUpdateCallback(lastChangeType, lastChangedData, getConfigCallback());
             }
-        } else if (snapshot.size === 0 && allTransactions.length === 0) {
-             // Caso especial: Primeira carga e banco vazio
-             if (granularUpdateCallback) {
-                granularUpdateCallback('loaded_empty', null, getBankBalanceConfig());
-             }
         }
-
     }, (error) => {
-        console.error("Erro ao carregar transações:", error);
+        console.error("Erro ao buscar transações em tempo real:", error);
     });
 };
 
-
 // --- API Pública do Módulo ---
 
-export const initializeFinanceService = (companyId, granularUpdateCallback, getBankBalanceConfig) => {
-    transactionsCollection = collection(db, `companies/${companyId}/transactions`);
-    companyRef = doc(db, "companies", companyId);
-    setupTransactionsListener(granularUpdateCallback, getBankBalanceConfig);
+export const initializeFinanceService = (companyId, granularUpdateCallback, getConfigCallback) => {
+    dbCollection = collection(db, `companies/${companyId}/transactions`);
+    setupFirestoreListener(granularUpdateCallback, getConfigCallback);
 };
 
 export const saveTransaction = async (transactionData, transactionId) => {
-    if (!transactionsCollection) return;
+    // Garante que números sejam salvos como números
+    if (transactionData.amount) transactionData.amount = parseFloat(transactionData.amount);
+
     if (transactionId) {
-        await updateDoc(doc(transactionsCollection, transactionId), transactionData);
+        await updateDoc(doc(dbCollection, transactionId), transactionData);
+        return transactionId;
     } else {
-        await addDoc(transactionsCollection, transactionData);
+        const docRef = await addDoc(dbCollection, transactionData);
+        return docRef.id;
     }
 };
 
 export const deleteTransaction = async (id) => {
-    if (!id || !transactionsCollection) return;
-    await deleteDoc(doc(transactionsCollection, id));
+    if (!id) return;
+    await deleteDoc(doc(dbCollection, id));
 };
 
 export const markTransactionAsPaid = async (id) => {
-    if (!id || !transactionsCollection) return;
-    const transactionRef = doc(transactionsCollection, id);
-    await updateDoc(transactionRef, {
-        status: 'pago',
-        date: new Date().toISOString().split('T')[0]
+    if (!id) return;
+    await updateDoc(doc(dbCollection, id), {
+        status: 'pago'
     });
 };
 
-export const saveInitialBalance = async (newBalance) => {
-    if (!companyRef) return;
+export const saveInitialBalance = async (companyId, newBalance) => {
+    const companyRef = doc(db, "companies", companyId);
     await updateDoc(companyRef, {
-        bankBalanceConfig: {
-            initialBalance: newBalance
-        }
+        "bankBalanceConfig.initialBalance": parseFloat(newBalance)
     });
 };
 
-export const getTransactionByOrderId = async (orderId) => {
-    if (!transactionsCollection) return null;
-    const q = query(
-        transactionsCollection, 
-        where("orderId", "==", orderId),
-        where("category", "==", "Adiantamento de Pedido")
-    );
-    try {
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            const doc = querySnapshot.docs[0];
-            return { id: doc.id, ...doc.data() };
-        }
-        return null;
-    } catch (error) {
-        console.error("Erro ao buscar transação por orderId:", error);
-        return null;
-    }
-};
-
-export const deleteAllTransactionsByOrderId = async (orderId) => {
-    if (!transactionsCollection || !orderId) return;
-    const q = query(
-        transactionsCollection, 
-        where("orderId", "==", orderId)
-    );
-    try {
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) return;
-
-        const batch = writeBatch(db);
-        querySnapshot.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-    } catch (error) {
-        console.error("Erro ao excluir transações por orderId:", error);
-        throw new Error("Falha ao excluir finanças vinculadas.");
-    }
+export const getAllTransactions = () => {
+    return [...allTransactions];
 };
 
 export const getTransactionById = (id) => {
     return allTransactions.find(t => t.id === id);
 };
 
-export const getAllTransactions = () => {
-    return [...allTransactions]; 
+export const getTransactionByOrderId = (orderId) => {
+    return allTransactions.find(t => t.orderId === orderId);
+};
+
+export const deleteAllTransactionsByOrderId = async (orderId) => {
+    if (!orderId || !dbCollection) return;
+    
+    // Busca localmente primeiro para evitar leituras desnecessárias se vazio
+    const hasLinked = allTransactions.some(t => t.orderId === orderId);
+    if (!hasLinked) return;
+
+    const q = query(dbCollection, where("orderId", "==", orderId));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+        const batch = writeBatch(db);
+        querySnapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+    }
 };
 
 export const cleanupFinanceService = () => {
@@ -160,6 +133,5 @@ export const cleanupFinanceService = () => {
         unsubscribeListener = null;
     }
     allTransactions = [];
-    transactionsCollection = null;
-    companyRef = null;
+    dbCollection = null;
 };
