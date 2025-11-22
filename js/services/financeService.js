@@ -1,62 +1,65 @@
-// Importa as funções necessárias do Firestore
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, writeBatch, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// js/services/financeService.js
+// ==========================================================
+// MÓDULO FINANCE SERVICE (v5.12.0 - BATCHED UPDATES)
+// ==========================================================
 
-// Importa a instância 'db' do nosso arquivo de configuração
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, writeBatch, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from '../firebaseConfig.js';
 
 // --- Estado do Módulo ---
-let transactionsCollection = null; // Referência à coleção de transações no Firestore
-let companyRef = null;             // Referência ao documento da empresa para salvar o saldo
-let allTransactions = [];          // Cache local de todas as transações
-let unsubscribeListener = null;    // Função para desligar o listener do Firestore
+let transactionsCollection = null; 
+let companyRef = null;             
+let allTransactions = [];          
+let unsubscribeListener = null;    
 
 // --- Funções Privadas ---
 
-/**
- * Configura o listener em tempo real para a coleção de transações.
- * @param {function} granularUpdateCallback - A função (do main.js) que será chamada para cada mudança granular.
- * @param {function} getBankBalanceConfig - Uma função que retorna o objeto de configuração de saldo atual.
- */
 const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig) => {
     if (unsubscribeListener) unsubscribeListener();
 
     const q = query(transactionsCollection);
+    
     unsubscribeListener = onSnapshot(q, (snapshot) => {
-        
-        snapshot.docChanges().forEach((change) => {
-            // --- CORREÇÃO v4.2: A verificação 'hasPendingWrites' foi REMOVIDA daqui ---
-            // Isso garante que a lista de transações se atualize
-            // imediatamente após o usuário salvar um novo lançamento.
+        let hasChanges = false;
+        let lastChangeType = 'modified'; // Default fallback
+        let lastChangedData = null;
 
+        // 1. Processa todas as mudanças no Cache Local PRIMEIRO
+        snapshot.docChanges().forEach((change) => {
+            hasChanges = true;
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allTransactions.findIndex(t => t.id === data.id);
 
-            // Gerencia o cache local
             if (change.type === 'added') {
-                if (index === -1) {
-                    allTransactions.push(data);
-                }
+                if (index === -1) allTransactions.push(data);
             } else if (change.type === 'modified') {
-                if (index > -1) {
-                    allTransactions[index] = data; // Atualiza o item no cache
-                } else {
-                    allTransactions.push(data); // Adiciona se não existia
-                }
+                if (index > -1) allTransactions[index] = data;
+                else allTransactions.push(data);
             } else if (change.type === 'removed') {
-                if (index > -1) {
-                    allTransactions.splice(index, 1); // Remove do cache
-                }
+                if (index > -1) allTransactions.splice(index, 1);
             }
             
-            // Invoca o callback granular
-            // Também recalcula o dashboard, pois os KPIs (indicadores principais) precisam ser atualizados
-            if (granularUpdateCallback) {
-                granularUpdateCallback(change.type, data, getBankBalanceConfig());
-            }
+            // Guarda referência da última mudança para passar ao callback (simbólico em lote)
+            lastChangeType = change.type;
+            lastChangedData = data;
         });
         
-        // Ordena o cache local após as mudanças
-        allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // 2. Só avisa o Main.js SE houve mudanças e DEPOIS de processar tudo
+        if (hasChanges) {
+            // Ordena o cache antes de notificar
+            allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (granularUpdateCallback) {
+                // Envia apenas UMA notificação consolidada. 
+                // Isso evita "martelar" o main.js com 50 chamadas na inicialização.
+                granularUpdateCallback(lastChangeType, lastChangedData, getBankBalanceConfig());
+            }
+        } else if (snapshot.size === 0 && allTransactions.length === 0) {
+             // Caso especial: Primeira carga e banco vazio
+             if (granularUpdateCallback) {
+                granularUpdateCallback('loaded_empty', null, getBankBalanceConfig());
+             }
+        }
 
     }, (error) => {
         console.error("Erro ao carregar transações:", error);
@@ -66,23 +69,12 @@ const setupTransactionsListener = (granularUpdateCallback, getBankBalanceConfig)
 
 // --- API Pública do Módulo ---
 
-/**
- * Inicializa o serviço financeiro para uma empresa específica.
- * @param {string} companyId - O ID da empresa do usuário logado.
- * @param {function} granularUpdateCallback - A função de callback granular (em main.js).
- * @param {function} getBankBalanceConfig - Função que retorna o objeto de configuração de saldo.
- */
 export const initializeFinanceService = (companyId, granularUpdateCallback, getBankBalanceConfig) => {
     transactionsCollection = collection(db, `companies/${companyId}/transactions`);
     companyRef = doc(db, "companies", companyId);
     setupTransactionsListener(granularUpdateCallback, getBankBalanceConfig);
 };
 
-/**
- * Salva uma transação (cria ou atualiza).
- * @param {object} transactionData - O objeto com os dados da transação.
- * @param {string|null} transactionId - O ID da transação para atualizar, ou null para criar.
- */
 export const saveTransaction = async (transactionData, transactionId) => {
     if (!transactionsCollection) return;
     if (transactionId) {
@@ -92,19 +84,11 @@ export const saveTransaction = async (transactionData, transactionId) => {
     }
 };
 
-/**
- * Exclui uma transação do Firestore.
- * @param {string} id - O ID da transação a ser excluída.
- */
 export const deleteTransaction = async (id) => {
     if (!id || !transactionsCollection) return;
     await deleteDoc(doc(transactionsCollection, id));
 };
 
-/**
- * Marca uma transação "A Receber" como "paga" e atualiza sua data para hoje.
- * @param {string} id - O ID da transação a ser atualizada.
- */
 export const markTransactionAsPaid = async (id) => {
     if (!id || !transactionsCollection) return;
     const transactionRef = doc(transactionsCollection, id);
@@ -114,10 +98,6 @@ export const markTransactionAsPaid = async (id) => {
     });
 };
 
-/**
- * Salva o valor do saldo inicial no documento da empresa.
- * @param {number} newBalance - O novo valor de saldo inicial.
- */
 export const saveInitialBalance = async (newBalance) => {
     if (!companyRef) return;
     await updateDoc(companyRef, {
@@ -127,26 +107,16 @@ export const saveInitialBalance = async (newBalance) => {
     });
 };
 
-/**
- * Busca a primeira transação de adiantamento vinculada a um ID de pedido.
- * @param {string} orderId - O ID do pedido.
- * @returns {object|null} O documento da transação (com id) ou null se não encontrar.
- */
 export const getTransactionByOrderId = async (orderId) => {
     if (!transactionsCollection) return null;
-
-    // Cria uma query para buscar transações onde o campo 'orderId' é igual ao fornecido
-    // e o campo 'category' é 'Adiantamento de Pedido' (para garantir que seja a transação correta)
     const q = query(
         transactionsCollection, 
         where("orderId", "==", orderId),
         where("category", "==", "Adiantamento de Pedido")
     );
-
     try {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-            // Retorna o primeiro documento encontrado (deve haver apenas um)
             const doc = querySnapshot.docs[0];
             return { id: doc.id, ...doc.data() };
         }
@@ -157,62 +127,35 @@ export const getTransactionByOrderId = async (orderId) => {
     }
 };
 
-/**
- * Exclui TODAS as transações financeiras vinculadas a um ID de pedido.
- * @param {string} orderId - O ID do pedido.
- */
 export const deleteAllTransactionsByOrderId = async (orderId) => {
     if (!transactionsCollection || !orderId) return;
-
-    // 1. Encontra todas as transações (Adiantamento, Quitação, etc.)
     const q = query(
         transactionsCollection, 
         where("orderId", "==", orderId)
     );
-
     try {
         const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-            return; // Nenhuma transação para excluir.
-        }
+        if (querySnapshot.empty) return;
 
-        // 2. Cria um batch para excluir todas de uma vez
         const batch = writeBatch(db);
         querySnapshot.forEach((doc) => {
             batch.delete(doc.ref);
         });
-
-        // 3. Executa a exclusão
         await batch.commit();
-
     } catch (error) {
         console.error("Erro ao excluir transações por orderId:", error);
-        // Propaga o erro para o main.js tratar, se necessário
         throw new Error("Falha ao excluir finanças vinculadas.");
     }
 };
 
-/**
- * Busca uma única transação no cache local pelo seu ID.
- * Necessário para comparar valores antes de salvar edições.
- * @param {string} id - O ID da transação.
- * @returns {object|undefined}
- */
 export const getTransactionById = (id) => {
     return allTransactions.find(t => t.id === id);
 };
 
-/**
- * Retorna uma cópia da lista completa de todas as transações do cache local.
- * @returns {Array}
- */
 export const getAllTransactions = () => {
-    return [...allTransactions]; // Retorna cópia para segurança (imutabilidade)
+    return [...allTransactions]; 
 };
 
-/**
- * Limpa o estado do serviço e desliga o listener.
- */
 export const cleanupFinanceService = () => {
     if (unsubscribeListener) {
         unsubscribeListener();
