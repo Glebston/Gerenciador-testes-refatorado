@@ -1,6 +1,6 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.8.3 - AUDITORIA ATIVA)
+// MÓDULO FINANCE RENDERER (v5.13.1 - VISUAL SHIELD)
 // ==========================================================
 
 import { DOM } from './dom.js';
@@ -99,10 +99,8 @@ const showTransactionsPlaceholder = (isSearch) => {
 };
 
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
-    // --- LOG DE AUDITORIA (ATIVO) ---
-    // Este log é crucial para confirmar se o valor R$ 100 está chegando aqui
-    console.log(`🎨 [RENDERER] Iniciando pintura. Argumento pendingOrdersValue recebido:`, pendingOrdersValue);
-
+    
+    // --- LÓGICA DE FILTRO ---
     const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
     const now = new Date();
     let startDate, endDate;
@@ -136,6 +134,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         return true;
     });
 
+    // --- CÁLCULOS BASE ---
     let faturamentoBruto = 0, despesasTotais = 0, contasAReceber = 0, valorRecebido = 0;
     let bankFlow = 0;
     let cashFlow = 0;
@@ -162,29 +161,44 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     });
 
-    // --- CORREÇÃO E SOMA ---
-    const pendingValueFloat = parseFloat(pendingOrdersValue) || 0;
-    contasAReceber += pendingValueFloat;
+    // --- SOMATÓRIA HÍBRIDA (TRANSAÇÕES + PEDIDOS) ---
+    let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
+    
+    // --- BLINDAGEM VISUAL (ANTI-ZERO FANTASMA) ---
+    // Lógica Crítica: Se o DOM já tem um valor > 0 e recebemos um 0, ignoramos o 0.
+    // Isso protege contra race conditions onde os pedidos ainda não carregaram.
+    if (DOM.contasAReceber) {
+        const currentText = DOM.contasAReceber.textContent;
+        // Remove R$, espaços e converte formato brasileiro para float
+        const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+
+        if (incomingPendingValue === 0 && currentDomValue > 0) {
+            console.warn(`🛡️ [RENDERER] Escudo Ativado: Ignorando atualização de R$ 0,00 (Zero Fantasma). Mantendo R$ ${currentDomValue.toFixed(2)}`);
+            incomingPendingValue = currentDomValue - contasAReceber; // Ajuste reverso matemático para manter o total visual
+            if (incomingPendingValue < 0) incomingPendingValue = 0;
+        }
+    }
+
+    // Aplica o valor (seja o novo ou o blindado)
+    contasAReceber += incomingPendingValue;
 
     const lucroLiquido = valorRecebido - despesasTotais;
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
     const saldoEmCaixa = cashFlow;
 
-    // --- ATUALIZAÇÃO DO DOM SEGURA ---
+    // --- ATUALIZAÇÃO DO DOM ---
     if (DOM.faturamentoBruto) DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
     if (DOM.despesasTotais) DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
     
     if (DOM.contasAReceber) {
-        console.log(`🖌️ [RENDERER] Escrevendo no DOM (A Receber): R$ ${contasAReceber.toFixed(2)}`); // AGORA VAI APARECER
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
-    } else {
-        console.error("❌ [RENDERER] ERRO: Elemento 'contasAReceber' não encontrado no DOM.");
     }
     
     if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
     if (DOM.saldoEmConta) DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
     if (DOM.saldoEmCaixa) DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
     
+    // --- CATEGORIAS ---
     const expenseCategories = {}, incomeCategories = {};
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
