@@ -1,6 +1,6 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.13.1 - VISUAL SHIELD)
+// MÓDULO FINANCE RENDERER (v5.14.1 - SMART TRUST CHECK)
 // ==========================================================
 
 import { DOM } from './dom.js';
@@ -164,17 +164,20 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     // --- SOMATÓRIA HÍBRIDA (TRANSAÇÕES + PEDIDOS) ---
     let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
     
-    // --- BLINDAGEM VISUAL (ANTI-ZERO FANTASMA) ---
-    // Lógica Crítica: Se o DOM já tem um valor > 0 e recebemos um 0, ignoramos o 0.
-    // Isso protege contra race conditions onde os pedidos ainda não carregaram.
+    // --- BLINDAGEM VISUAL INTELIGENTE (v5.14.1) ---
     if (DOM.contasAReceber) {
         const currentText = DOM.contasAReceber.textContent;
-        // Remove R$, espaços e converte formato brasileiro para float
         const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+        
+        // VERIFICAÇÃO DE CONFIANÇA:
+        // Verificamos se o valor que está na tela foi colocado por NÓS (Javascript) anteriormente.
+        // Se DOM.contasAReceber.dataset.trusted não for 'true', significa que é um placeholder do HTML (ex: R$ 40.000,00).
+        // Nesse caso, permitimos sobrescrever, mesmo que o novo valor seja zero.
+        const isTrustedValue = DOM.contasAReceber.dataset.trusted === 'true';
 
-        if (incomingPendingValue === 0 && currentDomValue > 0) {
-            console.warn(`🛡️ [RENDERER] Escudo Ativado: Ignorando atualização de R$ 0,00 (Zero Fantasma). Mantendo R$ ${currentDomValue.toFixed(2)}`);
-            incomingPendingValue = currentDomValue - contasAReceber; // Ajuste reverso matemático para manter o total visual
+        if (incomingPendingValue === 0 && currentDomValue > 0 && isTrustedValue) {
+            console.warn(`🛡️ [RENDERER] Escudo Ativado: Ignorando 'Zero Fantasma' pois o valor atual (R$ ${currentDomValue}) é confiável.`);
+            incomingPendingValue = currentDomValue - contasAReceber; 
             if (incomingPendingValue < 0) incomingPendingValue = 0;
         }
     }
@@ -192,6 +195,9 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
+        // MARCA O ELEMENTO COMO CONFIÁVEL
+        // Daqui para frente, a blindagem funcionará, pois sabemos que fomos nós que escrevemos este valor.
+        DOM.contasAReceber.dataset.trusted = 'true';
     }
     
     if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
