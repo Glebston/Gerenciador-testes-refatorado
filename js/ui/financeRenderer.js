@@ -1,13 +1,15 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.15.0 - ROBUST CONTEXT AWARENESS)
+// MÓDULO FINANCE RENDERER (v5.16.0 - AUTHORITY PROTOCOL)
 // ==========================================================
 
 import { DOM } from './dom.js';
 
-// --- Estado Local do Renderizador ---
-let isFirstRender = true;
-let lastRenderedFilter = ''; // Memoriza qual foi o último filtro desenhado
+// --- Estado de Autoridade Visual ---
+// Armazena se NÓS (o código) já escrevemos um valor válido neste contexto.
+// Se false, qualquer coisa na tela (como os R$ 40.000) é considerada lixo e será sobrescrita.
+let hasAuthorizedValue = false;
+let lastContextFilter = ''; 
 
 const generateTransactionRowHTML = (t) => {
     const isIncome = t.type === 'income';
@@ -104,8 +106,16 @@ const showTransactionsPlaceholder = (isSearch) => {
 
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     
-    // --- LÓGICA DE FILTRO ---
+    // --- 1. LÓGICA DE FILTRO ---
     const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
+    
+    // Se o filtro mudou, revogamos a autoridade imediatamente.
+    // Isso garante que os valores antigos não sejam protegidos no novo contexto.
+    if (filterValue !== lastContextFilter) {
+        hasAuthorizedValue = false;
+        lastContextFilter = filterValue;
+    }
+
     const now = new Date();
     let startDate, endDate;
 
@@ -138,7 +148,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         return true;
     });
 
-    // --- CÁLCULOS BASE ---
+    // --- 2. CÁLCULOS BASE ---
     let faturamentoBruto = 0, despesasTotais = 0, contasAReceber = 0, valorRecebido = 0;
     let bankFlow = 0;
     let cashFlow = 0;
@@ -165,36 +175,28 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     });
 
-    // --- SOMATÓRIA HÍBRIDA (TRANSAÇÕES + PEDIDOS) ---
+    // --- 3. SOMATÓRIA E PROTOCOLO DE AUTORIDADE ---
     let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
     
-    // --- BLINDAGEM VISUAL V2 (CONTEXT AWARE) ---
     if (DOM.contasAReceber) {
         const currentText = DOM.contasAReceber.textContent;
         const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-        const isTrustedValue = DOM.contasAReceber.dataset.trusted === 'true';
         
-        // Verifica se o filtro mudou desde a última renderização
-        const filterChanged = lastRenderedFilter !== filterValue;
-
-        // O Escudo só ativa se TODAS as condições forem verdadeiras:
-        // 1. NÃO é a primeira carga (se for, tem que limpar o placeholder)
-        // 2. O filtro NÃO mudou (se mudou, o valor antigo não serve mais, pode aceitar zero)
-        // 3. O valor chegando é ZERO (o problema que queremos evitar)
-        // 4. O valor na tela é maior que zero (tem algo pra proteger)
-        // 5. O valor na tela é confiável (não é lixo de HTML)
+        // A regra é simples: Só protegemos o valor da tela SE nós autorizamos ele antes.
+        // Se hasAuthorizedValue for false, significa que o que está na tela (40k) não é nosso. Sobrescreve.
         
-        const shouldShield = !isFirstRender && !filterChanged && incomingPendingValue === 0 && currentDomValue > 0 && isTrustedValue;
-
-        if (shouldShield) {
-            console.warn(`🛡️ [RENDERER] Escudo Ativado: Mantendo R$ ${currentDomValue} (Zero Fantasma detectado no mesmo contexto).`);
+        const isZeroGlitch = incomingPendingValue === 0;
+        const screenHasValue = currentDomValue > 0;
+        
+        if (isZeroGlitch && screenHasValue && hasAuthorizedValue) {
+            console.warn(`🛡️ [RENDERER] Escudo Ativado: Protegendo R$ ${currentDomValue} (Dado Autorizado).`);
             incomingPendingValue = currentDomValue - contasAReceber; 
             if (incomingPendingValue < 0) incomingPendingValue = 0;
         } else {
-            // Se o escudo não ativou, verificamos se precisamos limpar atributos antigos
-            if (isFirstRender || filterChanged) {
-                 // Reseta a confiança para garantir que o novo valor seja aceito
-                 // console.log("🧹 [RENDERER] Contexto novo ou primeira carga. Aceitando qualquer valor.");
+            // Se entramos aqui, ou o valor novo é bom, ou o valor da tela é lixo (40k).
+            // Em ambos os casos, vamos atualizar.
+            if (!hasAuthorizedValue && screenHasValue) {
+               console.log("🧹 [RENDERER] Limpando valor não autorizado (Placeholder):", currentDomValue);
             }
         }
     }
@@ -202,24 +204,28 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     // Aplica o valor
     contasAReceber += incomingPendingValue;
 
+    // Se calculamos um valor final > 0 e vamos escrevê-lo, autorizamos a proteção futura.
+    if (contasAReceber > 0) {
+        hasAuthorizedValue = true;
+    }
+
     const lucroLiquido = valorRecebido - despesasTotais;
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
     const saldoEmCaixa = cashFlow;
 
-    // --- ATUALIZAÇÃO DO DOM ---
+    // --- 4. ATUALIZAÇÃO DO DOM ---
     if (DOM.faturamentoBruto) DOM.faturamentoBruto.textContent = `R$ ${faturamentoBruto.toFixed(2)}`;
     if (DOM.despesasTotais) DOM.despesasTotais.textContent = `R$ ${despesasTotais.toFixed(2)}`;
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
-        DOM.contasAReceber.dataset.trusted = 'true';
     }
     
     if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
     if (DOM.saldoEmConta) DOM.saldoEmConta.textContent = `R$ ${saldoEmConta.toFixed(2)}`;
     if (DOM.saldoEmCaixa) DOM.saldoEmCaixa.textContent = `R$ ${saldoEmCaixa.toFixed(2)}`;
     
-    // --- CATEGORIAS ---
+    // --- 5. CATEGORIAS ---
     const expenseCategories = {}, incomeCategories = {};
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
@@ -260,10 +266,6 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
 
     formatCategoryList(expenseCategories, DOM.topExpensesByCategory);
     formatCategoryList(incomeCategories, DOM.topIncomesByCategory);
-    
-    // Atualiza estado local
-    isFirstRender = false;
-    lastRenderedFilter = filterValue;
     
     return filteredTransactions;
 };
