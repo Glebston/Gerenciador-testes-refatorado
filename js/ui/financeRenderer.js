@@ -1,14 +1,14 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.16.0 - AUTHORITY PROTOCOL)
+// MÓDULO FINANCE RENDERER (v5.17.0 - MEMORY-FIRST ARCHITECTURE)
 // ==========================================================
 
 import { DOM } from './dom.js';
 
-// --- Estado de Autoridade Visual ---
-// Armazena se NÓS (o código) já escrevemos um valor válido neste contexto.
-// Se false, qualquer coisa na tela (como os R$ 40.000) é considerada lixo e será sobrescrita.
-let hasAuthorizedValue = false;
+// --- ESTADO INTERNO DO RENDERIZADOR (Fonte da Verdade) ---
+// Em vez de ler o DOM (que pode ter lixo/placeholders), usamos memória.
+// null = sistema acabou de iniciar, não temos histórico.
+let internalPendingRevenueCache = null;
 let lastContextFilter = ''; 
 
 const generateTransactionRowHTML = (t) => {
@@ -106,13 +106,13 @@ const showTransactionsPlaceholder = (isSearch) => {
 
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     
-    // --- 1. LÓGICA DE FILTRO ---
+    // --- 1. DETECÇÃO DE MUDANÇA DE CONTEXTO ---
     const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
     
-    // Se o filtro mudou, revogamos a autoridade imediatamente.
-    // Isso garante que os valores antigos não sejam protegidos no novo contexto.
+    // Se o filtro mudou, resetamos o cache interno. 
+    // Isso impede que um valor de "Janeiro" proteja um zero de "Fevereiro".
     if (filterValue !== lastContextFilter) {
-        hasAuthorizedValue = false;
+        internalPendingRevenueCache = null;
         lastContextFilter = filterValue;
     }
 
@@ -148,7 +148,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         return true;
     });
 
-    // --- 2. CÁLCULOS BASE ---
+    // --- 2. CÁLCULOS DOS TOTAIS ---
     let faturamentoBruto = 0, despesasTotais = 0, contasAReceber = 0, valorRecebido = 0;
     let bankFlow = 0;
     let cashFlow = 0;
@@ -175,39 +175,31 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         }
     });
 
-    // --- 3. SOMATÓRIA E PROTOCOLO DE AUTORIDADE ---
-    let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
-    
-    if (DOM.contasAReceber) {
-        const currentText = DOM.contasAReceber.textContent;
-        const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-        
-        // A regra é simples: Só protegemos o valor da tela SE nós autorizamos ele antes.
-        // Se hasAuthorizedValue for false, significa que o que está na tela (40k) não é nosso. Sobrescreve.
-        
-        const isZeroGlitch = incomingPendingValue === 0;
-        const screenHasValue = currentDomValue > 0;
-        
-        if (isZeroGlitch && screenHasValue && hasAuthorizedValue) {
-            console.warn(`🛡️ [RENDERER] Escudo Ativado: Protegendo R$ ${currentDomValue} (Dado Autorizado).`);
-            incomingPendingValue = currentDomValue - contasAReceber; 
-            if (incomingPendingValue < 0) incomingPendingValue = 0;
-        } else {
-            // Se entramos aqui, ou o valor novo é bom, ou o valor da tela é lixo (40k).
-            // Em ambos os casos, vamos atualizar.
-            if (!hasAuthorizedValue && screenHasValue) {
-               console.log("🧹 [RENDERER] Limpando valor não autorizado (Placeholder):", currentDomValue);
-            }
+    // --- 3. BLINDAGEM VISUAL (LÓGICA MEMORY-FIRST) ---
+    // Regra de Ouro: Ignoramos completamente o que está no DOM (textContent).
+    // Usamos apenas nossa memória interna (internalPendingRevenueCache).
+
+    let incomingValue = parseFloat(pendingOrdersValue) || 0;
+    let finalPendingToAdd = incomingValue;
+
+    // Se temos um valor positivo vindo do banco, atualizamos a memória.
+    if (incomingValue > 0) {
+        internalPendingRevenueCache = incomingValue;
+    }
+
+    // Se o valor vindo do banco é ZERO...
+    if (incomingValue === 0) {
+        // ...E nós TEMOS uma memória válida de um valor anterior neste mesmo filtro...
+        if (internalPendingRevenueCache !== null && internalPendingRevenueCache > 0) {
+            // ...Aí sim, ativamos o escudo e usamos a memória.
+            console.warn(`🛡️ [RENDERER] Escudo Ativado: Usando cache de memória (R$ ${internalPendingRevenueCache}) ao invés de 0.`);
+            finalPendingToAdd = internalPendingRevenueCache;
         }
+        // SE a memória for null (primeira carga), finalPendingToAdd continua sendo 0.
+        // Isso vai sobrescrever os R$ 40.000 do HTML com R$ 0,00. SUCESSO.
     }
 
-    // Aplica o valor
-    contasAReceber += incomingPendingValue;
-
-    // Se calculamos um valor final > 0 e vamos escrevê-lo, autorizamos a proteção futura.
-    if (contasAReceber > 0) {
-        hasAuthorizedValue = true;
-    }
+    contasAReceber += finalPendingToAdd;
 
     const lucroLiquido = valorRecebido - despesasTotais;
     const saldoEmConta = (userBankBalanceConfig.initialBalance || 0) + bankFlow;
@@ -219,6 +211,10 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
+        // Removemos datasets antigos para manter o código limpo
+        if (DOM.contasAReceber.hasAttribute('data-trusted')) {
+            DOM.contasAReceber.removeAttribute('data-trusted');
+        }
     }
     
     if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = `R$ ${lucroLiquido.toFixed(2)}`;
