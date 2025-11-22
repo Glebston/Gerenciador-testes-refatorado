@@ -1,12 +1,13 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.14.2 - AUTO TRUST RESET)
+// MÓDULO FINANCE RENDERER (v5.15.0 - ROBUST CONTEXT AWARENESS)
 // ==========================================================
 
 import { DOM } from './dom.js';
 
-// Variável de controle local para saber se é a primeira vez que rodamos
+// --- Estado Local do Renderizador ---
 let isFirstRender = true;
+let lastRenderedFilter = ''; // Memoriza qual foi o último filtro desenhado
 
 const generateTransactionRowHTML = (t) => {
     const isIncome = t.type === 'income';
@@ -167,29 +168,38 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     // --- SOMATÓRIA HÍBRIDA (TRANSAÇÕES + PEDIDOS) ---
     let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
     
-    // --- BLINDAGEM VISUAL INTELIGENTE (v5.14.2) ---
+    // --- BLINDAGEM VISUAL V2 (CONTEXT AWARE) ---
     if (DOM.contasAReceber) {
-        
-        // CORREÇÃO: Força o reset de confiança na primeira carga para ignorar placeholders do HTML
-        if (isFirstRender) {
-            DOM.contasAReceber.removeAttribute('data-trusted');
-            console.log("🧹 [RENDERER] Primeira carga: Limpando status de confiança do DOM.");
-        }
-
         const currentText = DOM.contasAReceber.textContent;
         const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-        
-        // Agora o dataset.trusted só será 'true' se nós o definimos via JS em uma execução anterior
         const isTrustedValue = DOM.contasAReceber.dataset.trusted === 'true';
+        
+        // Verifica se o filtro mudou desde a última renderização
+        const filterChanged = lastRenderedFilter !== filterValue;
 
-        if (incomingPendingValue === 0 && currentDomValue > 0 && isTrustedValue) {
-            console.warn(`🛡️ [RENDERER] Escudo Ativado: Ignorando 'Zero Fantasma' pois o valor atual (R$ ${currentDomValue}) é confiável.`);
+        // O Escudo só ativa se TODAS as condições forem verdadeiras:
+        // 1. NÃO é a primeira carga (se for, tem que limpar o placeholder)
+        // 2. O filtro NÃO mudou (se mudou, o valor antigo não serve mais, pode aceitar zero)
+        // 3. O valor chegando é ZERO (o problema que queremos evitar)
+        // 4. O valor na tela é maior que zero (tem algo pra proteger)
+        // 5. O valor na tela é confiável (não é lixo de HTML)
+        
+        const shouldShield = !isFirstRender && !filterChanged && incomingPendingValue === 0 && currentDomValue > 0 && isTrustedValue;
+
+        if (shouldShield) {
+            console.warn(`🛡️ [RENDERER] Escudo Ativado: Mantendo R$ ${currentDomValue} (Zero Fantasma detectado no mesmo contexto).`);
             incomingPendingValue = currentDomValue - contasAReceber; 
             if (incomingPendingValue < 0) incomingPendingValue = 0;
+        } else {
+            // Se o escudo não ativou, verificamos se precisamos limpar atributos antigos
+            if (isFirstRender || filterChanged) {
+                 // Reseta a confiança para garantir que o novo valor seja aceito
+                 // console.log("🧹 [RENDERER] Contexto novo ou primeira carga. Aceitando qualquer valor.");
+            }
         }
     }
 
-    // Aplica o valor (seja o novo ou o blindado)
+    // Aplica o valor
     contasAReceber += incomingPendingValue;
 
     const lucroLiquido = valorRecebido - despesasTotais;
@@ -202,7 +212,6 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
-        // MARCA O ELEMENTO COMO CONFIÁVEL PARA PRÓXIMAS ATUALIZAÇÕES
         DOM.contasAReceber.dataset.trusted = 'true';
     }
     
@@ -252,8 +261,9 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     formatCategoryList(expenseCategories, DOM.topExpensesByCategory);
     formatCategoryList(incomeCategories, DOM.topIncomesByCategory);
     
-    // Marca que a primeira renderização já aconteceu
+    // Atualiza estado local
     isFirstRender = false;
+    lastRenderedFilter = filterValue;
     
     return filteredTransactions;
 };
