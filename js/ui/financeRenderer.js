@@ -1,9 +1,12 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.14.1 - SMART TRUST CHECK)
+// MÓDULO FINANCE RENDERER (v5.14.2 - AUTO TRUST RESET)
 // ==========================================================
 
 import { DOM } from './dom.js';
+
+// Variável de controle local para saber se é a primeira vez que rodamos
+let isFirstRender = true;
 
 const generateTransactionRowHTML = (t) => {
     const isIncome = t.type === 'income';
@@ -164,15 +167,19 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     // --- SOMATÓRIA HÍBRIDA (TRANSAÇÕES + PEDIDOS) ---
     let incomingPendingValue = parseFloat(pendingOrdersValue) || 0;
     
-    // --- BLINDAGEM VISUAL INTELIGENTE (v5.14.1) ---
+    // --- BLINDAGEM VISUAL INTELIGENTE (v5.14.2) ---
     if (DOM.contasAReceber) {
+        
+        // CORREÇÃO: Força o reset de confiança na primeira carga para ignorar placeholders do HTML
+        if (isFirstRender) {
+            DOM.contasAReceber.removeAttribute('data-trusted');
+            console.log("🧹 [RENDERER] Primeira carga: Limpando status de confiança do DOM.");
+        }
+
         const currentText = DOM.contasAReceber.textContent;
         const currentDomValue = parseFloat(currentText.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
         
-        // VERIFICAÇÃO DE CONFIANÇA:
-        // Verificamos se o valor que está na tela foi colocado por NÓS (Javascript) anteriormente.
-        // Se DOM.contasAReceber.dataset.trusted não for 'true', significa que é um placeholder do HTML (ex: R$ 40.000,00).
-        // Nesse caso, permitimos sobrescrever, mesmo que o novo valor seja zero.
+        // Agora o dataset.trusted só será 'true' se nós o definimos via JS em uma execução anterior
         const isTrustedValue = DOM.contasAReceber.dataset.trusted === 'true';
 
         if (incomingPendingValue === 0 && currentDomValue > 0 && isTrustedValue) {
@@ -195,8 +202,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = `R$ ${contasAReceber.toFixed(2)}`;
-        // MARCA O ELEMENTO COMO CONFIÁVEL
-        // Daqui para frente, a blindagem funcionará, pois sabemos que fomos nós que escrevemos este valor.
+        // MARCA O ELEMENTO COMO CONFIÁVEL PARA PRÓXIMAS ATUALIZAÇÕES
         DOM.contasAReceber.dataset.trusted = 'true';
     }
     
@@ -245,6 +251,9 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
 
     formatCategoryList(expenseCategories, DOM.topExpensesByCategory);
     formatCategoryList(incomeCategories, DOM.topIncomesByCategory);
+    
+    // Marca que a primeira renderização já aconteceu
+    isFirstRender = false;
     
     return filteredTransactions;
 };
