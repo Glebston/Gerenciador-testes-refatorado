@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.7.15 - Smart Discount Logic)
+// MÓDULO ORDER SERVICE (v5.13.0 - BATCHED STABILITY)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -10,7 +10,7 @@ import { db } from '../firebaseConfig.js';
 let dbCollection = null;      
 let allOrders = [];           
 let unsubscribeListener = null; 
-const DEBUG_MODE = true; // Mantendo Auditoria ligada conforme solicitado
+const DEBUG_MODE = true; 
 
 // --- Funções Auxiliares de Cálculo ---
 
@@ -51,7 +51,14 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
 
     const q = query(dbCollection);
     unsubscribeListener = onSnapshot(q, (snapshot) => {
+        let hasChanges = false;
+        let lastChangeType = 'modified';
+        let lastChangedData = null;
+
+        // 1. Processamento em Lote (Batch)
+        // Evita expor o array allOrders em estado parcial
         snapshot.docChanges().forEach((change) => {
+            hasChanges = true;
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allOrders.findIndex(o => o.id === data.id);
 
@@ -64,10 +71,18 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
                 if (index > -1) allOrders.splice(index, 1);
             }
             
-            if (granularUpdateCallback) {
-                granularUpdateCallback(change.type, data, getViewCallback());
-            }
+            lastChangeType = change.type;
+            lastChangedData = data;
         });
+
+        // 2. Notificação Consolidada
+        if (hasChanges) {
+            // Ordenação opcional se necessário, mas mantemos o foco na integridade
+            if (granularUpdateCallback) {
+                granularUpdateCallback(lastChangeType, lastChangedData, getViewCallback());
+            }
+        }
+
     }, (error) => {
         console.error("Erro ao buscar pedidos em tempo real:", error);
     });
@@ -104,8 +119,8 @@ export const getAllOrders = () => {
 };
 
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
-    const isAuditing = (startDate || endDate) && DEBUG_MODE;
-    if (isAuditing) console.groupCollapsed("💰 Auditoria de Cálculo A Receber");
+    // Cálculo Blindado: Se não houver pedidos carregados, retorna 0 (mas o Proxy vai tratar isso)
+    if (allOrders.length === 0) return 0;
 
     const total = allOrders.reduce((acc, order) => {
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
@@ -127,26 +142,14 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
         const remaining = totalOrder - paid;
 
         if (remaining > 0.01) {
-            if (isAuditing) {
-                console.log(`Pedido ID: ${order.id} | Cliente: ${order.clientName} | Data: ${order.orderDate} | Resta: R$ ${remaining.toFixed(2)}`);
-            }
             return acc + remaining;
         }
         return acc;
     }, 0);
 
-    if (isAuditing) {
-        console.log(`%cTOTAL CALCULADO: R$ ${total.toFixed(2)}`, "color: green; font-weight: bold; font-size: 14px;");
-        console.groupEnd();
-    }
-
     return total;
 };
 
-/**
- * Atualiza o valor pago e o desconto com lógica inteligente.
- * v5.7.15: Evita descontos negativos ao aumentar o valor pago.
- */
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
     const orderRef = doc(dbCollection, orderId);
@@ -157,19 +160,14 @@ export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     const currentDiscount = parseFloat(orderData.discount) || 0;
     const currentPaid = parseFloat(orderData.downPayment) || 0;
 
-    // Objeto de atualização base
     let updates = {
         downPayment: currentPaid + diffValue
     };
 
-    // LÓGICA INTELIGENTE:
-    // 1. Se diffValue < 0 (Diminuiu o valor, ex: taxa), aumentamos o desconto para manter o saldo devedor igual.
-    // 2. Se diffValue > 0 (Aumentou o valor, ex: correção), NÃO mexemos no desconto, para que o saldo devedor diminua.
     if (diffValue < 0) {
         const adjustment = diffValue * -1; 
         updates.discount = currentDiscount + adjustment;
     }
-    // Se diffValue > 0, não adicionamos 'discount' ao objeto updates, mantendo o original.
 
     await updateDoc(orderRef, updates);
 };
