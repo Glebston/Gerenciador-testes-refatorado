@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.11.0 - CENTRALIZED SAFE RENDER)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.14.0 - FINAL STABLE)
 // ========================================================
 
 async function main() {
@@ -84,8 +84,7 @@ async function main() {
         // ========================================================
         // PARTE 2.B: FUNÇÃO DE RENDERIZAÇÃO SEGURA (CENTRALIZADA)
         // ========================================================
-        // Todas as partes do sistema (Main, Listeners, Proxies) devem usar ESTA função
-        // para atualizar o dashboard financeiro. Ela aplica a lógica de proteção do Cache.
+        // Todas as partes do sistema (Main, Listeners, Proxies) devem usar ESTA função.
         
         const safeRenderFinance = (source, transactions, config, pendingValue) => {
             let finalValue = pendingValue;
@@ -95,14 +94,10 @@ async function main() {
                 globalPendingRevenueCache = pendingValue;
             }
 
-            // 2. Proteção contra "Zero Acidental"
-            // Se o valor é zero, mas temos cache e o filtro não mudou, usamos o cache.
+            // 2. Proteção contra "Zero Acidental" (Redundância ao Visual Shield do Renderer)
             if (finalValue <= 0.01 && globalPendingRevenueCache > 0) {
-                console.log(`🛡️ [SAFE RENDER] Fonte: ${source} tentou zerar. Resgatando Cache: R$ ${globalPendingRevenueCache}`);
+                // Silencioso na produção, mas ativo
                 finalValue = globalPendingRevenueCache;
-            } else {
-                // Debug opcional para confirmar valores normais
-                // console.log(`🖌️ [SAFE RENDER] Fonte: ${source}. Valor: R$ ${finalValue}`);
             }
 
             UI.renderFinanceDashboard(transactions, config, finalValue);
@@ -114,7 +109,7 @@ async function main() {
         // ========================================================
         
         const initializeAppLogic = async (user) => {
-            console.log("🚀 [MAIN] Iniciando lógica da aplicação...");
+            console.log("🚀 [MAIN] Iniciando lógica da aplicação v5.14.0...");
             const userMappingRef = doc(db, "user_mappings", user.uid);
             const userMappingSnap = await getDoc(userMappingRef);
             
@@ -151,7 +146,8 @@ async function main() {
                 const pendingRevenue = calculateTotalPendingRevenue ? calculateTotalPendingRevenue(startOfThisMonth, endOfThisMonth) : 0;
                 
                 UI.renderOrders(getAllOrders(), currentOrdersView);
-                // Usa a função segura
+                
+                // Renderização inicial Segura
                 safeRenderFinance('Init', getAllTransactions(), userBankBalanceConfig, pendingRevenue);
                 
                 initializeIdleTimer(UI.DOM, handleLogout);
@@ -163,18 +159,14 @@ async function main() {
                     UI.DOM.app.classList.remove('hidden');
                     
                     // --- SAFETY REFRESH (2000ms) ---
+                    // Garante que, se o cálculo inicial falhou por race condition,
+                    // ele se corrige automaticamente após 2 segundos.
                     setTimeout(async () => {
-                        console.log("⏰ [MAIN] Safety Refresh (2000ms)...");
-                        
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
                         
                         if (calculateTotalPendingRevenue) {
                             const dates = getCurrentDashboardDates(); 
                             const freshPending = calculateTotalPendingRevenue(dates.startDate, dates.endDate);
-                            
-                            console.log(`💰 [MAIN] Correção Pós-Load: R$ ${freshPending}`);
-                            
-                            // Usa a função segura centralizada
                             safeRenderFinance('SafetyRefresh', getAllTransactions(), userBankBalanceConfig, freshPending);
                         }
                     }, 2000); 
@@ -230,7 +222,6 @@ async function main() {
 
             // Zera o cache se o filtro mudou de verdade
             if (filter !== lastFilterValue) {
-                console.log(`🔄 [MAIN] Filtro mudou de ${lastFilterValue} para ${filter}. Resetando cache.`);
                 globalPendingRevenueCache = 0;
                 lastFilterValue = filter;
             }
@@ -296,10 +287,10 @@ async function main() {
 
             if (calculateTotalPendingRevenue) {
                 if (orderUpdateDebounce) clearTimeout(orderUpdateDebounce);
+                // Debounce reduzido para 200ms
                 orderUpdateDebounce = setTimeout(() => {
                     const { startDate, endDate } = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(startDate, endDate);
-                    // Usa a função segura
                     safeRenderFinance('OrderChange', getAllTransactions ? getAllTransactions() : [], userBankBalanceConfig, pendingRevenue);
                 }, 200);
             }
@@ -317,6 +308,7 @@ async function main() {
             const searchTerm = UI.DOM.transactionSearchInput.value.toLowerCase();
             const passesSearchFilter = transaction.description.toLowerCase().includes(searchTerm);
 
+            // Atualização Granular (Visual Apenas)
             if (!passesDateFilter || !passesSearchFilter) {
                 if (type === 'modified' || type === 'removed') {
                     UI.removeTransactionRow(transaction.id);
@@ -329,15 +321,16 @@ async function main() {
                 }
             }
 
+            // Atualização do Dashboard Completo (Com Debounce Otimizado)
             if (calculateTotalPendingRevenue) {
                 if (financeUpdateDebounce) clearTimeout(financeUpdateDebounce);
+                // Debounce ajustado para 250ms para acomodar o Batching do Service
                 financeUpdateDebounce = setTimeout(() => {
                     const currentDates = getCurrentDashboardDates();
                     const pendingRevenue = calculateTotalPendingRevenue(currentDates.startDate, currentDates.endDate);
                     
-                    // AQUI ESTAVA O FURO: Agora usamos safeRenderFinance também aqui
                     safeRenderFinance('FinanceChange', getAllTransactions(), config, pendingRevenue);
-                }, 300);
+                }, 250);
             }
         };
 
@@ -512,20 +505,13 @@ async function main() {
         });
 
         // ==================================================================
-        // CORREÇÃO CRÍTICA v5.11.0: PROXY ATUALIZADO
+        // PROXY DE UI (Mantido para Compatibilidade)
         // ==================================================================
-        // O Proxy agora usa a função safeRenderFinance para garantir consistência
-        
         const FinanceUIProxy = Object.create(UI);
         FinanceUIProxy.renderFinanceDashboard = (transactions, config, pendingReceived) => {
-            
             const { startDate, endDate } = getCurrentDashboardDates();
             const authoritativePending = calculateTotalPendingRevenue(startDate, endDate);
-            
-            // Decisão: Usamos o cálculo autoritário se disponível, senão o recebido
             let finalPending = authoritativePending > 0 ? authoritativePending : pendingReceived;
-
-            // Chama o Renderizador Seguro Centralizado
             safeRenderFinance('ListenerProxy', transactions, config, finalPending);
         };
 
