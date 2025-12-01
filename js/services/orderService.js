@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.19.0 - SMART ELASTIC DISCOUNT)
+// MÓDULO ORDER SERVICE (v5.21.0 - CUMULATIVE RECEIVABLES)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -50,9 +50,6 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
 
     const q = query(dbCollection);
     unsubscribeListener = onSnapshot(q, (snapshot) => {
-        
-        // Mantendo a correção da v5.18.0:
-        // Notificação individual para garantir que a UI desenhe cada card.
         
         snapshot.docChanges().forEach((change) => {
             const data = { id: change.doc.id, ...change.doc.data() };
@@ -109,6 +106,7 @@ export const getAllOrders = () => {
     return [...allOrders]; 
 };
 
+// ALTERAÇÃO v5.21.0: Lógica Cumulativa (Ignora Data Inicial)
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     if (allOrders.length === 0) return 0;
 
@@ -116,19 +114,28 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
         const status = rawStatus.toLowerCase();
         
+        // Ignora cancelados ou entregues (pois entregue tecnicamente já foi 'resolvido', 
+        // seja pago ou não, sai da lista de pendências ativas do dashboard)
         if (status === 'cancelado' || status === 'entregue') return acc;
 
-        if (startDate || endDate) {
+        // Filtro de Data Híbrido:
+        // O "A Receber" é um Estoque, não Fluxo. Deve somar todo o histórico.
+        // Por isso, IGNORAMOS o startDate. Consideramos apenas o endDate (teto).
+        if (endDate) {
             const orderDateStr = order.orderDate || order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
             if (!orderDateStr) return acc; 
             const orderDate = new Date(orderDateStr + 'T00:00:00');
             if (isNaN(orderDate.getTime())) return acc; 
-            if (startDate && orderDate < startDate) return acc;
-            if (endDate && orderDate > endDate) return acc;
+            
+            // Se o pedido for do futuro em relação ao filtro, ignoramos.
+            if (orderDate > endDate) return acc;
+            
+            // REMOVIDO: if (startDate && orderDate < startDate) return acc;
+            // Agora somamos tudo desde o passado até a data fim.
         }
 
         const totalOrder = calculateOrderTotalValue(order);
-        const paid = parseFloat(order.downPayment) || 0;
+        const paid = parseFloat(order.downPayment) || 0; // Isso agora vem da soma das transações via listener/UI
         const remaining = totalOrder - paid;
 
         if (remaining > 0.01) {
@@ -140,7 +147,6 @@ export const calculateTotalPendingRevenue = (startDate = null, endDate = null) =
     return total;
 };
 
-// --- CORREÇÃO DE SINCRONIA FINANCEIRA (v5.19.0) ---
 export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
     if (!orderId || !dbCollection) return;
     const orderRef = doc(dbCollection, orderId);
@@ -157,18 +163,11 @@ export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
 
     // Lógica Elástica de Desconto
     if (diffValue < 0) {
-        // Se o pagamento DIMINUIU (diff negativo), o dinheiro sumiu.
-        // Aumentamos o desconto para cobrir a diferença.
         const adjustment = Math.abs(diffValue);
         updates.discount = currentDiscount + adjustment;
     } else if (diffValue > 0) {
-        // Se o pagamento AUMENTOU (diff positivo), o dinheiro apareceu/voltou.
-        // Devemos REDUZIR o desconto proporcionalmente, pois não precisamos mais dele.
         let newDiscount = currentDiscount - diffValue;
-        
-        // Trava de segurança: Desconto nunca pode ser negativo
         if (newDiscount < 0) newDiscount = 0;
-        
         updates.discount = newDiscount;
     }
 
