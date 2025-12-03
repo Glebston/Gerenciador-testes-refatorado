@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.21.0 - CUMULATIVE RECEIVABLES)
+// MÓDULO ORDER SERVICE (v5.22.0 - TRUE CUMULATIVE STATE)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -106,36 +106,27 @@ export const getAllOrders = () => {
     return [...allOrders]; 
 };
 
-// ALTERAÇÃO v5.21.0: Lógica Cumulativa (Ignora Data Inicial)
+// ALTERAÇÃO v5.22.0: Estado Absoluto (Ignora Datas Completamente)
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     if (allOrders.length === 0) return 0;
+
+    // Nota de Engenharia: Para que o "A Receber" se comporte como um Saldo Bancário 
+    // (acumulativo e real), ignoramos propositalmente os filtros de data (startDate/endDate).
+    // O valor retornado será SEMPRE a soma de todas as dívidas ativas no sistema hoje.
 
     const total = allOrders.reduce((acc, order) => {
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
         const status = rawStatus.toLowerCase();
         
-        // Ignora cancelados ou entregues (pois entregue tecnicamente já foi 'resolvido', 
-        // seja pago ou não, sai da lista de pendências ativas do dashboard)
+        // Ignora cancelados ou entregues
         if (status === 'cancelado' || status === 'entregue') return acc;
 
-        // Filtro de Data Híbrido:
-        // O "A Receber" é um Estoque, não Fluxo. Deve somar todo o histórico.
-        // Por isso, IGNORAMOS o startDate. Consideramos apenas o endDate (teto).
-        if (endDate) {
-            const orderDateStr = order.orderDate || order.date || (order.createdAt ? order.createdAt.split('T')[0] : null);
-            if (!orderDateStr) return acc; 
-            const orderDate = new Date(orderDateStr + 'T00:00:00');
-            if (isNaN(orderDate.getTime())) return acc; 
-            
-            // Se o pedido for do futuro em relação ao filtro, ignoramos.
-            if (orderDate > endDate) return acc;
-            
-            // REMOVIDO: if (startDate && orderDate < startDate) return acc;
-            // Agora somamos tudo desde o passado até a data fim.
-        }
-
+        // --- REMOVIDA LÓGICA DE DATAS ---
+        // Anteriormente verificávamos datas. Agora aceitamos tudo para evitar retornar Zero
+        // incorretamente e ativar o Cache Shield.
+        
         const totalOrder = calculateOrderTotalValue(order);
-        const paid = parseFloat(order.downPayment) || 0; // Isso agora vem da soma das transações via listener/UI
+        const paid = parseFloat(order.downPayment) || 0; 
         const remaining = totalOrder - paid;
 
         if (remaining > 0.01) {
@@ -161,7 +152,6 @@ export const updateOrderDiscountFromFinance = async (orderId, diffValue) => {
         downPayment: currentPaid + diffValue
     };
 
-    // Lógica Elástica de Desconto
     if (diffValue < 0) {
         const adjustment = Math.abs(diffValue);
         updates.discount = currentDiscount + adjustment;
