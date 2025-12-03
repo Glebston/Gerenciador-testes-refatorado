@@ -1,13 +1,9 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.19.2 - CUMULATIVE & FORMATTED)
+// MÓDULO FINANCE RENDERER (v5.22.1 - STATELESS & CLEAN)
 // ==========================================================
 
 import { DOM } from './dom.js';
-
-// --- ESTADO INTERNO DO RENDERIZADOR (Fonte da Verdade) ---
-let internalPendingRevenueCache = null;
-let lastContextFilter = ''; 
 
 // --- HELPER DE FORMATAÇÃO (BRL) ---
 const formatCurrency = (value) => {
@@ -117,12 +113,6 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     
     const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
     
-    // Reset de cache para blindagem visual se o contexto mudar
-    if (filterValue !== lastContextFilter) {
-        internalPendingRevenueCache = null;
-        lastContextFilter = filterValue;
-    }
-
     const now = new Date();
     let startDate, endDate;
 
@@ -178,7 +168,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     // somando tudo o que aconteceu desde o início dos tempos.
 
     let totalBank = userBankBalanceConfig.initialBalance || 0;
-    let totalCash = 0; // Preparado para o futuro initialCashBalance
+    let totalCash = 0; 
     let totalReceivablesTransaction = 0;
 
     allTransactions.forEach(t => {
@@ -198,28 +188,18 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
             } else {
                 // Banco (default)
                 if (t.type === 'income') totalBank += amount;
-                else if (t.type === 'expense') totalBank -= amount;
+                else if (t.type === 'expense') totalCash -= amount;
             }
         }
     });
 
-    // --- 4. BLINDAGEM VISUAL (PARA A RECEBER DOS PEDIDOS) ---
-    // Integra o valor dos pedidos pendentes com a proteção de memória
+    // --- 4. EXIBIÇÃO DIRETA (SEM FILTROS DE MEMÓRIA) ---
+    // Alteração v5.22.1: Removemos a "Blindagem Visual" interna.
+    // O renderer agora confia cegamente no valor passado pelo Main.js.
+    // Isso evita o travamento em valores antigos (ex: 190) quando o valor real muda.
+    
     let incomingOrdersValue = parseFloat(pendingOrdersValue) || 0;
-    let finalOrdersValue = incomingOrdersValue;
-
-    if (incomingOrdersValue > 0) {
-        internalPendingRevenueCache = incomingOrdersValue;
-    }
-
-    if (incomingOrdersValue === 0) {
-        if (internalPendingRevenueCache !== null && internalPendingRevenueCache > 0) {
-            console.warn(`🛡️ [RENDERER] Escudo Ativado: Usando cache (R$ ${internalPendingRevenueCache}) ao invés de 0.`);
-            finalOrdersValue = internalPendingRevenueCache;
-        }
-    }
-
-    const totalReceivables = totalReceivablesTransaction + finalOrdersValue;
+    const totalReceivables = totalReceivablesTransaction + incomingOrdersValue;
 
     // --- 5. ATUALIZAÇÃO DO DOM (COM FORMATAÇÃO PT-BR) ---
     if (DOM.faturamentoBruto) DOM.faturamentoBruto.textContent = formatCurrency(faturamentoBruto);
