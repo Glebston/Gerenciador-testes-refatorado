@@ -1,9 +1,14 @@
 // js/ui/financeRenderer.js
 // ==========================================================
-// MÓDULO FINANCE RENDERER (v5.22.1 - STATELESS & CLEAN)
+// MÓDULO FINANCE RENDERER (v5.22.2 - SMART SHIELD RESTORED)
 // ==========================================================
 
 import { DOM } from './dom.js';
+
+// --- ESTADO INTERNO (MEMÓRIA BLINDADA) ---
+// Recuperamos essa variável para evitar o "Zero Fantasma" no carregamento.
+let internalPendingRevenueCache = 0;
+let lastContextFilter = ''; 
 
 // --- HELPER DE FORMATAÇÃO (BRL) ---
 const formatCurrency = (value) => {
@@ -108,11 +113,14 @@ const showTransactionsPlaceholder = (isSearch) => {
 export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     
     // --- 1. LÓGICA DE FILTRO (PARA TABELA E FLUXO) ---
-    // Esta parte continua respeitando a data selecionada (Este Mês, etc.)
-    // para mostrar o desempenho do período e o extrato.
-    
     const filterValue = DOM.periodFilter ? DOM.periodFilter.value : 'thisMonth';
     
+    // Reset inteligente: Se mudou o filtro, não zeramos o cache imediatamente para evitar piscar,
+    // apenas atualizamos a referência de contexto.
+    if (filterValue !== lastContextFilter) {
+        lastContextFilter = filterValue;
+    }
+
     const now = new Date();
     let startDate, endDate;
 
@@ -139,7 +147,6 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     }
 
-    // Lista Filtrada: Usada SOMENTE para Tabela, Gráficos e KPIs de Fluxo (Faturamento/Despesas do Período)
     const filteredTransactions = allTransactions.filter(t => {
         const transactionDate = new Date(t.date + 'T00:00:00');
         if (startDate && endDate) return transactionDate >= startDate && transactionDate <= endDate;
@@ -163,10 +170,7 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
 
     const lucroLiquido = valorRecebidoPeriodo - despesasTotais;
 
-    // --- 3. CÁLCULO DE SALDOS E PENDÊNCIAS (CUMULATIVO / HISTÓRICO TOTAL) ---
-    // Esta parte ignora o filtro de data. O saldo deve refletir a realidade atual da conta,
-    // somando tudo o que aconteceu desde o início dos tempos.
-
+    // --- 3. CÁLCULO DE SALDOS (Eterno) ---
     let totalBank = userBankBalanceConfig.initialBalance || 0;
     let totalCash = 0; 
     let totalReceivablesTransaction = 0;
@@ -174,49 +178,62 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
     allTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
         
-        // Contas a Receber (Transações)
         if (t.type === 'income' && t.status === 'a_receber') {
             totalReceivablesTransaction += amount;
-            return; // Não soma no saldo se ainda não recebeu
+            return; 
         }
 
-        // Saldos Efetivos (Pago/Recebido)
         if (t.status !== 'a_receber') {
             if (t.source === 'caixa') {
                 if (t.type === 'income') totalCash += amount;
                 else if (t.type === 'expense') totalCash -= amount;
             } else {
-                // Banco (default)
                 if (t.type === 'income') totalBank += amount;
-                else if (t.type === 'expense') totalCash -= amount;
+                else if (t.type === 'expense') totalBank -= amount;
             }
         }
     });
 
-    // --- 4. EXIBIÇÃO DIRETA (SEM FILTROS DE MEMÓRIA) ---
-    // Alteração v5.22.1: Removemos a "Blindagem Visual" interna.
-    // O renderer agora confia cegamente no valor passado pelo Main.js.
-    // Isso evita o travamento em valores antigos (ex: 190) quando o valor real muda.
+    // --- 4. BLINDAGEM VISUAL INTELIGENTE (SMART SHIELD v2) ---
+    // Objetivo: Não mostrar Zero se tivermos um valor antigo, MAS aceitar atualizações reais.
     
     let incomingOrdersValue = parseFloat(pendingOrdersValue) || 0;
-    const totalReceivables = totalReceivablesTransaction + incomingOrdersValue;
+    let finalOrdersValue = incomingOrdersValue;
 
-    // --- 5. ATUALIZAÇÃO DO DOM (COM FORMATAÇÃO PT-BR) ---
+    if (incomingOrdersValue > 0) {
+        // Se veio um valor REAL (ex: 200), atualizamos o cache e a tela.
+        // Isso corrige o travamento no valor antigo (190).
+        if (incomingOrdersValue !== internalPendingRevenueCache) {
+            console.log(`[RENDERER] Atualizando Cache A Receber: R$ ${internalPendingRevenueCache} -> R$ ${incomingOrdersValue}`);
+            internalPendingRevenueCache = incomingOrdersValue;
+        }
+    } else if (incomingOrdersValue === 0) {
+        // Se veio ZERO (provável delay de rede) e temos cache, usamos o cache.
+        if (internalPendingRevenueCache > 0) {
+            // console.warn(`🛡️ [RENDERER] Escudo Ativado: Mantendo R$ ${internalPendingRevenueCache} enquanto carrega.`);
+            finalOrdersValue = internalPendingRevenueCache;
+        }
+        // Se não temos cache (primeira carga real zero), mantém zero.
+    }
+
+    const totalReceivables = totalReceivablesTransaction + finalOrdersValue;
+
+    // --- 5. ATUALIZAÇÃO DO DOM ---
     if (DOM.faturamentoBruto) DOM.faturamentoBruto.textContent = formatCurrency(faturamentoBruto);
     if (DOM.despesasTotais) DOM.despesasTotais.textContent = formatCurrency(despesasTotais);
     
     if (DOM.contasAReceber) {
         DOM.contasAReceber.textContent = formatCurrency(totalReceivables);
+        // Remove atributo de loading se existir
         if (DOM.contasAReceber.hasAttribute('data-trusted')) DOM.contasAReceber.removeAttribute('data-trusted');
     }
     
     if (DOM.lucroLiquido) DOM.lucroLiquido.textContent = formatCurrency(lucroLiquido);
     
-    // Saldos agora mostram o valor acumulado real, independente do filtro
     if (DOM.saldoEmConta) DOM.saldoEmConta.textContent = formatCurrency(totalBank);
     if (DOM.saldoEmCaixa) DOM.saldoEmCaixa.textContent = formatCurrency(totalCash);
     
-    // --- 6. CATEGORIAS (Respeita o Filtro) ---
+    // --- 6. CATEGORIAS ---
     const expenseCategories = {}, incomeCategories = {};
     filteredTransactions.forEach(t => {
         const amount = parseFloat(t.amount) || 0;
@@ -264,10 +281,8 @@ export const renderFinanceKPIs = (allTransactions, userBankBalanceConfig, pendin
 export const renderFinanceDashboard = (allTransactions, userBankBalanceConfig, pendingOrdersValue = 0) => {
     if (!DOM.periodFilter) return;
 
-    // Renderiza KPIs e Saldos
     const filteredTransactions = renderFinanceKPIs(allTransactions, userBankBalanceConfig, pendingOrdersValue);
 
-    // Renderiza a Tabela (usando a lista filtrada)
     const searchTerm = DOM.transactionSearchInput.value.toLowerCase();
     const displayTransactions = searchTerm ?
         filteredTransactions.filter(t => t.description.toLowerCase().includes(searchTerm)) :
