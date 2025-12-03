@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.22.0 - TRUE CUMULATIVE STATE)
+// MÓDULO ORDER SERVICE (v5.22.1 - DIAGNOSTIC MODE)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -50,12 +50,10 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
 
     const q = query(dbCollection);
     unsubscribeListener = onSnapshot(q, (snapshot) => {
-        
         snapshot.docChanges().forEach((change) => {
             const data = { id: change.doc.id, ...change.doc.data() };
             const index = allOrders.findIndex(o => o.id === data.id);
 
-            // 1. Atualiza a Memória
             if (change.type === 'added') {
                 if (index === -1) allOrders.push(data);
             } else if (change.type === 'modified') {
@@ -65,12 +63,10 @@ const setupFirestoreListener = (granularUpdateCallback, getViewCallback) => {
                 if (index > -1) allOrders.splice(index, 1);
             }
             
-            // 2. Notifica a UI
             if (granularUpdateCallback) {
                 granularUpdateCallback(change.type, data, getViewCallback());
             }
         });
-
     }, (error) => {
         console.error("Erro ao buscar pedidos em tempo real:", error);
     });
@@ -106,34 +102,43 @@ export const getAllOrders = () => {
     return [...allOrders]; 
 };
 
-// ALTERAÇÃO v5.22.0: Estado Absoluto (Ignora Datas Completamente)
+// --- O RASTREADOR ESTÁ AQUI ---
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
-    if (allOrders.length === 0) return 0;
+    if (allOrders.length === 0) {
+        console.log("🕵️ [DIAGNÓSTICO] Lista de pedidos vazia.");
+        return 0;
+    }
 
-    // Nota de Engenharia: Para que o "A Receber" se comporte como um Saldo Bancário 
-    // (acumulativo e real), ignoramos propositalmente os filtros de data (startDate/endDate).
-    // O valor retornado será SEMPRE a soma de todas as dívidas ativas no sistema hoje.
+    console.groupCollapsed("🕵️ [DIAGNÓSTICO] Calculando A Receber (Acumulativo)");
+    console.log(`Total de Pedidos no Banco: ${allOrders.length}`);
 
     const total = allOrders.reduce((acc, order) => {
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
         const status = rawStatus.toLowerCase();
+        const client = order.clientName || 'Sem Nome';
         
-        // Ignora cancelados ou entregues
-        if (status === 'cancelado' || status === 'entregue') return acc;
+        // Log individual para ver quem está sendo ignorado
+        if (status === 'cancelado' || status === 'entregue') {
+            console.log(`❌ Ignorado (Status): ${client} - Status: ${status}`);
+            return acc;
+        }
 
-        // --- REMOVIDA LÓGICA DE DATAS ---
-        // Anteriormente verificávamos datas. Agora aceitamos tudo para evitar retornar Zero
-        // incorretamente e ativar o Cache Shield.
-        
         const totalOrder = calculateOrderTotalValue(order);
         const paid = parseFloat(order.downPayment) || 0; 
         const remaining = totalOrder - paid;
 
+        console.log(`✅ Processando: ${client} | Total: ${totalOrder} | Pago: ${paid} | Resta: ${remaining}`);
+
         if (remaining > 0.01) {
             return acc + remaining;
+        } else {
+            console.log(`⚠️ Ignorado (Sem Saldo): ${client} | Resta: ${remaining}`);
         }
         return acc;
     }, 0);
+
+    console.log(`💰 TOTAL FINAL CALCULADO: R$ ${total.toFixed(2)}`);
+    console.groupEnd();
 
     return total;
 };
