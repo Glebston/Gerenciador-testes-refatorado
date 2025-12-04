@@ -1,6 +1,6 @@
 // js/services/orderService.js
 // ==========================================================
-// MÓDULO ORDER SERVICE (v5.22.0 - TRUE CUMULATIVE STATE)
+// MÓDULO ORDER SERVICE (v5.23.0 - GRANULAR CALCULATION FIX)
 // ==========================================================
 
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -11,34 +11,53 @@ let dbCollection = null;
 let allOrders = [];           
 let unsubscribeListener = null; 
 
-// --- Funções Auxiliares de Cálculo ---
+// --- Funções Auxiliares de Cálculo (REFATORADA v5.23) ---
 
-const countPartItems = (part) => {
-    let totalQty = 0;
-    if (part.sizes && typeof part.sizes === 'object') {
-        Object.values(part.sizes).forEach(sizesObj => {
-            if (sizesObj && typeof sizesObj === 'object') {
-                Object.values(sizesObj).forEach(qty => {
-                    totalQty += (parseInt(qty) || 0);
-                });
-            }
-        });
-    }
-    if (part.details && Array.isArray(part.details)) {
-        totalQty += part.details.length;
-    }
-    return totalQty;
-};
-
+/**
+ * Calcula o valor total do pedido separando rigorosamente os tipos de peças.
+ * Corrige o bug onde o preço de uma peça personalizada "contaminava" o preço
+ * das peças padrão no mesmo bloco.
+ */
 const calculateOrderTotalValue = (order) => {
     let grossTotal = 0;
+    
     if (order.parts && Array.isArray(order.parts)) {
         order.parts.forEach(part => {
-            const price = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPriceStandard) || parseFloat(part.unitPrice) || 0;
-            const qty = countPartItems(part);
-            grossTotal += (price * qty);
+            // 1. CÁLCULO DE PEÇAS PADRÃO (Grades P/M/G etc)
+            let standardQty = 0;
+            if (part.sizes && typeof part.sizes === 'object') {
+                Object.values(part.sizes).forEach(sizesObj => {
+                    if (sizesObj && typeof sizesObj === 'object') {
+                        Object.values(sizesObj).forEach(qty => {
+                            standardQty += (parseInt(qty) || 0);
+                        });
+                    }
+                });
+            }
+            // Usa unitPriceStandard. Se não existir, tenta fallback seguro, mas prioriza o específico do grupo.
+            const priceStandard = parseFloat(part.unitPriceStandard) || parseFloat(part.unitPrice) || 0;
+            grossTotal += (standardQty * priceStandard);
+
+            // 2. CÁLCULO DE PEÇAS ESPECÍFICAS (Tamanhos Personalizados)
+            let specificQty = 0;
+            if (part.specifics && Array.isArray(part.specifics)) {
+                specificQty = part.specifics.length;
+            }
+            // Usa unitPriceSpecific.
+            const priceSpecific = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPrice) || 0;
+            grossTotal += (specificQty * priceSpecific);
+
+            // 3. CÁLCULO DE PEÇAS DETALHADAS (Nome/Número)
+            let detailedQty = 0;
+            if (part.details && Array.isArray(part.details)) {
+                detailedQty = part.details.length;
+            }
+            // Peças detalhadas geralmente usam o campo genérico 'unitPrice' ou têm lógica própria
+            const priceDetailed = parseFloat(part.unitPrice) || 0;
+            grossTotal += (detailedQty * priceDetailed);
         });
     }
+
     const discount = parseFloat(order.discount) || 0;
     return grossTotal - discount;
 };
@@ -106,26 +125,22 @@ export const getAllOrders = () => {
     return [...allOrders]; 
 };
 
-// ALTERAÇÃO v5.22.0: Estado Absoluto (Ignora Datas Completamente)
 export const calculateTotalPendingRevenue = (startDate = null, endDate = null) => {
     if (allOrders.length === 0) return 0;
 
-    // Nota de Engenharia: Para que o "A Receber" se comporte como um Saldo Bancário 
-    // (acumulativo e real), ignoramos propositalmente os filtros de data (startDate/endDate).
-    // O valor retornado será SEMPRE a soma de todas as dívidas ativas no sistema hoje.
-
+    // v5.22.0: Estado Absoluto (Ignora Datas)
     const total = allOrders.reduce((acc, order) => {
         const rawStatus = order.orderStatus ? order.orderStatus.trim() : '';
         const status = rawStatus.toLowerCase();
         
-        // Ignora cancelados ou entregues
         if (status === 'cancelado' || status === 'entregue') return acc;
 
-        // --- REMOVIDA LÓGICA DE DATAS ---
-        // Anteriormente verificávamos datas. Agora aceitamos tudo para evitar retornar Zero
-        // incorretamente e ativar o Cache Shield.
-        
+        // O cálculo agora usa a lógica GRANULAR (Padrão + Específico + Detalhado)
         const totalOrder = calculateOrderTotalValue(order);
+        
+        // Pagamento agora é baseado no que foi salvo, mas idealmente deveria ser a soma das transações.
+        // Como o orderService é rápido, usamos o campo cacheado 'downPayment' do pedido para performance,
+        // confiando que o orderListeners.js mantém ele atualizado.
         const paid = parseFloat(order.downPayment) || 0; 
         const remaining = totalOrder - paid;
 
