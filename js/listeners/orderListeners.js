@@ -1,6 +1,6 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.25.1 - UX WHATSAPP FIX)
+// MÓDULO ORDER LISTENERS (v5.25.2 - WHATSAPP LINK FIX)
 // Responsabilidade: Capturar eventos e conectar UI <-> Services
 // ==========================================================
 
@@ -294,9 +294,16 @@ export function initializeOrderListeners(UI, deps) {
                 message = `Olá ${firstName}, aqui é da ${company}. Estou passando para confirmar que recebemos seu pedido e ele já está em produção. Qualquer dúvida, estou à disposição!`;
             }
 
-            // v5.25.1 FIX: Usamos target com nome fixo para reutilizar a aba do WhatsApp
             const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-            window.open(url, 'whatsapp_tab'); 
+            
+            // v5.25.2 FIX: Método "Anchor Click" para tentar forçar reutilização de aba
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = 'whatsapp_tab'; // Tenta forçar o nome
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     });
 
