@@ -1,6 +1,6 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.25.0 - WHATSAPP LOGIC ADDED)
+// MÓDULO ORDER LISTENERS (v5.25.1 - UX WHATSAPP FIX)
 // Responsabilidade: Capturar eventos e conectar UI <-> Services
 // ==========================================================
 
@@ -28,7 +28,6 @@ function collectFormData(UI) {
         paymentMethod: paymentMethodValue, 
         mockupUrls: Array.from(UI.DOM.existingFilesContainer.querySelectorAll('a')).map(a => a.href),
         
-        // Campos legados
         downPaymentDate: new Date().toISOString().split('T')[0], 
         paymentFinSource: 'banco',
         paymentFinStatus: 'pago'
@@ -275,7 +274,6 @@ export function initializeOrderListeners(UI, deps) {
             shareOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
 
-        // --- LÓGICA DO BOTÃO WHATSAPP (v5.25.0) ---
         if (btn.id === 'whatsappBtn') {
             const order = services.getOrderById(btn.dataset.id);
             if (!order || !order.clientPhone) {
@@ -283,26 +281,22 @@ export function initializeOrderListeners(UI, deps) {
                 return;
             }
 
-            // Limpeza e formatação do telefone
             let phone = order.clientPhone.replace(/\D/g, '');
-            // Se o número não tiver DDI (ex: 8599999999), adiciona o 55 do Brasil
             if (phone.length <= 11) phone = '55' + phone;
 
-            const company = userCompanyName(); // Pega o nome da empresa
-            const firstName = order.clientName.split(' ')[0]; // Pega só o primeiro nome do cliente
+            const company = userCompanyName(); 
+            const firstName = order.clientName.split(' ')[0]; 
             let message = '';
 
             if (order.orderStatus === 'Entregue') {
-                // Mensagem de Agradecimento (Pós-Venda)
                 message = `Olá ${firstName}, seu pedido na ${company} foi finalizado e entregue! Muito obrigado pela preferência. Precisando, é só chamar.`;
             } else {
-                // Mensagem Neutra de Confirmação (Evita prometer datas específicas para não gerar cobrança)
                 message = `Olá ${firstName}, aqui é da ${company}. Estou passando para confirmar que recebemos seu pedido e ele já está em produção. Qualquer dúvida, estou à disposição!`;
             }
 
-            // Abre a API Universal do WhatsApp (funciona Desktop e Mobile)
+            // v5.25.1 FIX: Usamos target com nome fixo para reutilizar a aba do WhatsApp
             const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-            window.open(url, '_blank');
+            window.open(url, 'whatsapp_tab'); 
         }
     });
 
