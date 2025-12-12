@@ -1,17 +1,15 @@
 // js/listeners/orderListeners.js
+// ==========================================================
+// MÓDULO ORDER LISTENERS (v5.25.0 - WHATSAPP LOGIC ADDED)
+// Responsabilidade: Capturar eventos e conectar UI <-> Services
+// ==========================================================
 
-// v5.24.0: Adicionado shareOrderPdf na importação
 import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, shareOrderPdf } from '../utils.js';
 
 /**
  * Coleta os dados do formulário do pedido.
- * v5.20: Adaptação para lista de pagamentos múltipla
  */
 function collectFormData(UI) {
-    // OBS: Ignoramos os seletores antigos de 'activeSource' e 'isAReceber'
-    // pois agora cada pagamento na lista tem sua própria fonte.
-    
-    // Calcula o total pago baseado na lista visual (Verdade da UI)
     const paymentList = UI.getPaymentList ? UI.getPaymentList() : [];
     const totalDownPayment = paymentList.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
 
@@ -25,13 +23,12 @@ function collectFormData(UI) {
         deliveryDate: UI.DOM.deliveryDate.value, 
         generalObservation: UI.DOM.generalObservation.value,
         parts: [], 
-        // O valor do adiantamento agora é a SOMA da lista
         downPayment: totalDownPayment, 
         discount: parseFloat(UI.DOM.discount.value) || 0,
         paymentMethod: paymentMethodValue, 
         mockupUrls: Array.from(UI.DOM.existingFilesContainer.querySelectorAll('a')).map(a => a.href),
         
-        // Campos legados mantidos para compatibilidade, mas controlados pela lista
+        // Campos legados
         downPaymentDate: new Date().toISOString().split('T')[0], 
         paymentFinSource: 'banco',
         paymentFinStatus: 'pago'
@@ -67,49 +64,33 @@ export function initializeOrderListeners(UI, deps) {
         UI.showOrderModal(); 
     });
 
-    // ========================================================
-    // v5.20: LÓGICA DA "PONTE" (MULTI-PAGAMENTOS)
-    // ========================================================
     UI.DOM.orderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         UI.DOM.saveBtn.disabled = true; 
         UI.DOM.uploadIndicator.classList.remove('hidden');
         
         try {
-            // --- ETAPA 1: Upload de Arquivos ---
             const files = UI.DOM.mockupFiles.files;
             const uploadPromises = Array.from(files).map(file => fileToBase64(file).then(uploadToImgBB));
             const newUrls = (await Promise.all(uploadPromises)).filter(Boolean);
             
-            // --- ETAPA 2: Coletar Dados e Salvar Pedido ---
             const orderData = collectFormData(UI); 
             orderData.mockupUrls.push(...newUrls);
             
             const orderId = UI.DOM.orderId.value;
             const savedOrderId = await services.saveOrder(orderData, orderId); 
             
-            // --- ETAPA 3: SINCRONIA FINANCEIRA MULTI-TRANSAÇÃO ---
             const clientName = orderData.clientName;
-            
-            // 3.1 Busca transações existentes para comparar
             const existingTransactions = services.getTransactionsByOrderId ? services.getTransactionsByOrderId(savedOrderId) : [];
-            
-            // 3.2 Pega a lista desejada da UI
             const newPaymentList = UI.getPaymentList ? UI.getPaymentList() : [];
 
-            // 3.3 Lógica de Atualização (CRUD)
-            
-            // A) Remover transações que não estão mais na lista
             const idsInNewList = newPaymentList.map(p => p.id).filter(id => id);
             for (const existing of existingTransactions) {
-                // Se a transação existente não estiver na lista nova (e não for Quitação Final), apaga
-                // (Proteção: Se categoria for 'Quitação de Pedido', mantemos, pois ela é gerada pelo botão de entregar)
                 if (existing.category !== 'Quitação de Pedido' && !idsInNewList.includes(existing.id)) {
                     await services.deleteTransaction(existing.id);
                 }
             }
 
-            // B) Criar ou Atualizar transações da lista
             for (const payment of newPaymentList) {
                 const transactionData = {
                     date: payment.date,
@@ -121,12 +102,9 @@ export function initializeOrderListeners(UI, deps) {
                     status: 'pago',
                     orderId: savedOrderId
                 };
-
-                // Se tem ID, atualiza. Se não, cria.
                 await services.saveTransaction(transactionData, payment.id);
             }
 
-            // --- ETAPA 4: Feedback ---
             UI.hideOrderModal();
             
             if (orderData.orderStatus === 'Finalizado' || orderData.orderStatus === 'Entregue') {
@@ -163,19 +141,12 @@ export function initializeOrderListeners(UI, deps) {
         if (btn.classList.contains('edit-btn')) {
             let { partCounter } = getState();
             partCounter = 0;
-            
-            // v5.20: Carrega as transações do pedido antes de abrir o modal
             const transactions = services.getTransactionsByOrderId ? services.getTransactionsByOrderId(id) : [];
-            // Filtra apenas adiantamentos (ignora quitações finais geradas na entrega)
             const downPayments = transactions.filter(t => t.category === 'Adiantamento de Pedido');
-            
             partCounter = UI.populateFormForEdit(order, partCounter);
-            
-            // Injeta a lista no UI handler
             if (UI.setPaymentList) {
                 UI.setPaymentList(downPayments);
             }
-            
             setState({ partCounter });
             UI.showOrderModal();
             
@@ -184,19 +155,14 @@ export function initializeOrderListeners(UI, deps) {
             partCounter = 0;
             partCounter = UI.populateFormForEdit(order, partCounter);
             setState({ partCounter });
-            
             UI.DOM.orderId.value = ''; 
             UI.DOM.modalTitle.textContent = 'Novo Pedido (Replicado)';
             UI.DOM.orderStatus.value = 'Pendente'; 
             UI.DOM.orderDate.value = new Date().toISOString().split('T')[0];
             UI.DOM.deliveryDate.value = ''; 
             UI.DOM.discount.value = ''; 
-            // UI.DOM.downPayment.value = ''; // Ignorado, usamos setPaymentList
             UI.updateFinancials();
-            
-            // Limpa lista de pagamentos na replicação
             if (UI.setPaymentList) UI.setPaymentList([]);
-            
             UI.showOrderModal();
             
         } else if (btn.classList.contains('delete-btn')) {
@@ -301,13 +267,42 @@ export function initializeOrderListeners(UI, deps) {
             UI.DOM.viewModal.innerHTML = ''; 
         }
         
-        // v5.24.0: Suporte ao novo botão de compartilhar e ao legado de gerar PDF
         if (btn.id === 'comprehensivePdfBtn') {
             generateComprehensivePdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
         
         if (btn.id === 'sharePdfBtn') {
             shareOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
+        }
+
+        // --- LÓGICA DO BOTÃO WHATSAPP (v5.25.0) ---
+        if (btn.id === 'whatsappBtn') {
+            const order = services.getOrderById(btn.dataset.id);
+            if (!order || !order.clientPhone) {
+                UI.showInfoModal("Este pedido não possui telefone cadastrado.");
+                return;
+            }
+
+            // Limpeza e formatação do telefone
+            let phone = order.clientPhone.replace(/\D/g, '');
+            // Se o número não tiver DDI (ex: 8599999999), adiciona o 55 do Brasil
+            if (phone.length <= 11) phone = '55' + phone;
+
+            const company = userCompanyName(); // Pega o nome da empresa
+            const firstName = order.clientName.split(' ')[0]; // Pega só o primeiro nome do cliente
+            let message = '';
+
+            if (order.orderStatus === 'Entregue') {
+                // Mensagem de Agradecimento (Pós-Venda)
+                message = `Olá ${firstName}, seu pedido na ${company} foi finalizado e entregue! Muito obrigado pela preferência. Precisando, é só chamar.`;
+            } else {
+                // Mensagem Neutra de Confirmação (Evita prometer datas específicas para não gerar cobrança)
+                message = `Olá ${firstName}, aqui é da ${company}. Estou passando para confirmar que recebemos seu pedido e ele já está em produção. Qualquer dúvida, estou à disposição!`;
+            }
+
+            // Abre a API Universal do WhatsApp (funciona Desktop e Mobile)
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank');
         }
     });
 
@@ -320,7 +315,6 @@ export function initializeOrderListeners(UI, deps) {
         setState({ partCounter });
     });
     
-    // UI.DOM.downPayment.addEventListener('input', UI.updateFinancials); // Removido, controlado pelo manager
     UI.DOM.discount.addEventListener('input', UI.updateFinancials);
 
     UI.DOM.clientPhone.addEventListener('input', (e) => {
