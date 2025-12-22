@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.22.4 - TRUE ZERO)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.22.5 - ADMIN PREP)
 // ========================================================
 
 async function main() {
@@ -62,6 +62,7 @@ async function main() {
         let userCompanyId = null;
         let userCompanyName = null;
         let userBankBalanceConfig = { initialBalance: 0 };
+        let isAdminUser = false; // Controle de Admin
 
         let currentDashboardView = 'orders';
         let currentOrdersView = 'pending';
@@ -84,18 +85,10 @@ async function main() {
         // ========================================================
         
         const safeRenderFinance = (source, transactions, config, pendingValue) => {
-            // v5.22.4 FIX: Remoção da "Trava de Cache" no Main.js.
-            // Se o pendingValue vier como 0 (porque o usuário apagou tudo), 
-            // devemos confiar nele e enviar 0 para a tela.
-            // A responsabilidade visual agora é 100% do financeRenderer.js
-            
             let finalValue = pendingValue;
-
-            // Se for undefined ou null (erro de cálculo), assumimos 0
             if (finalValue === undefined || finalValue === null) {
                 finalValue = 0;
             }
-
             UI.renderFinanceDashboard(transactions, config, finalValue);
         };
 
@@ -105,7 +98,16 @@ async function main() {
         // ========================================================
         
         const initializeAppLogic = async (user) => {
-            console.log("🚀 [MAIN] Iniciando lógica da aplicação v5.22.4 (True Zero)...");
+            console.log("🚀 [MAIN] Iniciando lógica da aplicação v5.22.5 (Admin Ready)...");
+            
+            // --- VERIFICAÇÃO DE ADMIN (HARDCODED PARA SEGURANÇA INICIAL) ---
+            // Substitua pelo seu email real abaixo
+            const ADMIN_EMAILS = ['admin@paglucro.com', 'saianolucrobr@gmail.com']; 
+            if (ADMIN_EMAILS.includes(user.email)) {
+                isAdminUser = true;
+                console.log("👑 Modo Administrador Ativado");
+            }
+
             const userMappingRef = doc(db, "user_mappings", user.uid);
             const userMappingSnap = await getDoc(userMappingRef);
             
@@ -116,6 +118,30 @@ async function main() {
 
                 if (companySnap.exists()) {
                     const companyData = companySnap.data();
+                    
+                    // ============================================================
+                    // 🔒 TRAVA DE SEGURANÇA E MENSAGENS (NOVIDADE v5.22.5)
+                    // ============================================================
+                    
+                    // 1. Verifica se o usuário está BLOQUEADO
+                    if (companyData.isBlocked === true) {
+                        console.warn("🚫 Usuário bloqueado pelo Administrador.");
+                        // Mostra o modal de erro (reusando o InfoModal ou criando um Alerta)
+                        alert("ACESSO SUSPENSO\n\nSua conta está temporariamente bloqueada.\nPor favor, entre em contato com o suporte para regularizar.");
+                        await handleLogout(); // Desloga imediatamente
+                        return; // Para tudo por aqui
+                    }
+
+                    // 2. Verifica se há MENSAGEM DO ADMIN
+                    if (companyData.adminMessage && companyData.adminMessage.trim() !== "") {
+                        // Mostra a mensagem assim que carregar a UI
+                        setTimeout(() => {
+                            UI.showInfoModal(`🔔 MENSAGEM DO SISTEMA:\n\n${companyData.adminMessage}`);
+                        }, 1500);
+                    }
+                    
+                    // ============================================================
+
                     userCompanyName = companyData.companyName || user.email;
                     userBankBalanceConfig = companyData.bankBalanceConfig || { initialBalance: 0 };
                 } else {
@@ -153,6 +179,12 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
+                    // Se for Admin, mostra botão especial (Lógica futura)
+                    if (isAdminUser) {
+                        // Podemos injetar o botão de Admin aqui futuramente
+                        // document.getElementById('adminPanelBtn').classList.remove('hidden');
+                    }
+                    
                     setTimeout(async () => {
                         if (UI.DOM.periodFilter && !UI.DOM.periodFilter.value) UI.DOM.periodFilter.value = 'thisMonth';
                         
@@ -187,6 +219,7 @@ async function main() {
             userCompanyId = null;
             userCompanyName = null;
             userBankBalanceConfig = { initialBalance: 0 };
+            isAdminUser = false;
         };
 
         onAuthStateChanged(auth, (user) => {
