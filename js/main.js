@@ -179,10 +179,11 @@ async function main() {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // Se for Admin, mostra botão especial (Lógica futura)
+                    // Se for Admin, carrega e inicia o Painel Administrativo
                     if (isAdminUser) {
-                        // Podemos injetar o botão de Admin aqui futuramente
-                        // document.getElementById('adminPanelBtn').classList.remove('hidden');
+                        console.log("👑 Carregando módulo Admin...");
+                        const { initializeAdminPanel } = await import(`./admin.js${cacheBuster}`);
+                        initializeAdminPanel();
                     }
                     
                     setTimeout(async () => {
@@ -587,3 +588,4 @@ async function main() {
     }
 }
 main();
+
