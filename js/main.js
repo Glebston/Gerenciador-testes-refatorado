@@ -175,7 +175,7 @@ async function main() {
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
-                setTimeout(() => {
+                setTimeout(async () => {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
@@ -588,4 +588,5 @@ async function main() {
     }
 }
 main();
+
 
