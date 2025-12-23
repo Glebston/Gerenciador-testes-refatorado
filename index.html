@@ -328,12 +328,15 @@
             
             <div class="flex-1 overflow-auto bg-gray-50 p-6">
                 <div class="flex flex-col sm:flex-row gap-4 mb-6 justify-between items-center">
-                    <div class="flex gap-2 w-full sm:w-auto">
+                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <div class="relative w-full sm:w-80">
                             <input type="text" id="adminSearchInput" placeholder="Buscar empresa ou email..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none">
                             <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                         </div>
-                        <button id="btnCreateCompany" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm whitespace-nowrap">
+                        <a href="https://console.firebase.google.com/u/0/project/_/authentication/users" target="_blank" class="bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 flex items-center gap-2 shadow-sm text-sm border border-gray-300 transition" title="1º Passo: Criar Email/Senha no Firebase">
+                            🔗 Abrir Firebase
+                        </a>
+                        <button id="btnCreateCompany" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm whitespace-nowrap text-sm transition">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
                             Nova Empresa
                         </button>
