@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.22.5 - ADMIN PREP)
+// PARTE 1: INICIALIZAÇÃO DINÂMICA (v5.27.0 - ADMIN V2)
 // ========================================================
 
 async function main() {
@@ -13,7 +13,8 @@ async function main() {
         // ========================================================
 
         const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-        const { doc, getDoc, writeBatch, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+        // Adicionado 'updateDoc' e 'serverTimestamp' para a funcionalidade de rastreio
+        const { doc, getDoc, updateDoc, serverTimestamp, writeBatch, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
         
         const { db, auth } = await import(`./firebaseConfig.js${cacheBuster}`);
         const { handleLogout } = await import(`./auth.js${cacheBuster}`);
@@ -98,10 +99,10 @@ async function main() {
         // ========================================================
         
         const initializeAppLogic = async (user) => {
-            console.log("🚀 [MAIN] Iniciando lógica da aplicação v5.22.5 (Admin Ready)...");
+            console.log("🚀 [MAIN] Iniciando lógica v5.27.0 (Admin V2)...");
             
-            // --- VERIFICAÇÃO DE ADMIN (HARDCODED PARA SEGURANÇA INICIAL) ---
-            // Substitua pelo seu email real abaixo
+            // --- CONFIGURAÇÃO DE ADMIN ---
+            // Substitua pelos seus emails reais
             const ADMIN_EMAILS = ['admin@paglucro.com', 'saianolucrobr@gmail.com']; 
             if (ADMIN_EMAILS.includes(user.email)) {
                 isAdminUser = true;
@@ -120,26 +121,48 @@ async function main() {
                     const companyData = companySnap.data();
                     
                     // ============================================================
-                    // 🔒 TRAVA DE SEGURANÇA E MENSAGENS (NOVIDADE v5.22.5)
+                    // 🛡️ SEGURANÇA AVANÇADA (Bloqueio + Vencimento)
                     // ============================================================
-                    
-                    // 1. Verifica se o usuário está BLOQUEADO
+
+                    // 1. Bloqueio Manual (Switch do Admin)
                     if (companyData.isBlocked === true) {
                         console.warn("🚫 Usuário bloqueado pelo Administrador.");
-                        // Mostra o modal de erro (reusando o InfoModal ou criando um Alerta)
-                        alert("ACESSO SUSPENSO\n\nSua conta está temporariamente bloqueada.\nPor favor, entre em contato com o suporte para regularizar.");
-                        await handleLogout(); // Desloga imediatamente
-                        return; // Para tudo por aqui
+                        alert("ACESSO SUSPENSO\n\nSua conta está bloqueada administrativamente. Entre em contato com o suporte.");
+                        await handleLogout(); 
+                        return; // Para a execução
                     }
 
-                    // 2. Verifica se há MENSAGEM DO ADMIN
+                    // 2. Verificação de Vencimento (Novo)
+                    // Só verifica se NÃO for vitalício e NÃO for o Admin (você nunca vence)
+                    if (companyData.dueDate && !companyData.isLifetime && !isAdminUser) {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        
+                        // O input date salva como YYYY-MM-DD. Precisamos converter corretamente.
+                        const [y, m, d] = companyData.dueDate.split('-').map(Number);
+                        const dueDate = new Date(y, m - 1, d); // Mês no JS começa em 0 (Jan=0)
+                        
+                        if (today > dueDate) {
+                            console.warn("🚫 Plano vencido.");
+                            alert(`PLANO VENCIDO\n\nSua assinatura expirou em ${companyData.dueDate.split('-').reverse().join('/')}.\nPor favor, renove para continuar acessando.`);
+                            await handleLogout(); 
+                            return; // Para a execução
+                        }
+                    }
+
+                    // 3. Atualizar Último Acesso (Novo - O Espião)
+                    // Registra a hora que o usuário logou. Usamos catch para não travar se falhar.
+                    updateDoc(companyRef, { 
+                        lastAccess: serverTimestamp(),
+                        email: user.email // Garante que temos o email atualizado no banco
+                    }).catch(e => console.warn("Falha silenciosa ao registrar acesso:", e));
+
+                    // 4. Mensagens do Admin
                     if (companyData.adminMessage && companyData.adminMessage.trim() !== "") {
-                        // Mostra a mensagem assim que carregar a UI
                         setTimeout(() => {
                             UI.showInfoModal(`🔔 MENSAGEM DO SISTEMA:\n\n${companyData.adminMessage}`);
                         }, 1500);
                     }
-                    
                     // ============================================================
 
                     userCompanyName = companyData.companyName || user.email;
@@ -175,15 +198,20 @@ async function main() {
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
+                // CRÍTICO: setTimeout com ASYNC para permitir o await import do admin
                 setTimeout(async () => {
                     UI.DOM.authContainer.classList.add('hidden'); 
                     UI.DOM.app.classList.remove('hidden');
                     
-                    // Se for Admin, carrega e inicia o Painel Administrativo
+                    // Se for Admin, carrega o módulo administrativo v2
                     if (isAdminUser) {
                         console.log("👑 Carregando módulo Admin...");
-                        const { initializeAdminPanel } = await import(`./admin.js${cacheBuster}`);
-                        initializeAdminPanel();
+                        try {
+                            const { initializeAdminPanel } = await import(`./admin.js${cacheBuster}`);
+                            initializeAdminPanel();
+                        } catch (e) {
+                            console.error("Erro ao carregar painel admin:", e);
+                        }
                     }
                     
                     setTimeout(async () => {
@@ -534,8 +562,6 @@ async function main() {
             const { startDate, endDate } = getCurrentDashboardDates();
             const authoritativePending = calculateTotalPendingRevenue(startDate, endDate);
             
-            // Aqui também removemos a lógica que preferia o cache.
-            // Se calculateTotalPendingRevenue retornar 0, é 0.
             let finalPending = authoritativePending;
             if (finalPending === undefined) finalPending = 0;
 
@@ -588,5 +614,3 @@ async function main() {
     }
 }
 main();
-
-
