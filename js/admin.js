@@ -1,6 +1,6 @@
 // js/admin.js
 // ========================================================
-// MÓDULO ADMINISTRATIVO V3.0 (CRM & Financeiro Integrado)
+// MÓDULO ADMINISTRATIVO V3.1 (CRM, Histórico e Correções)
 // ========================================================
 
 import { db } from './firebaseConfig.js';
@@ -21,7 +21,7 @@ import {
 let usersCache = [];
 
 export async function initializeAdminPanel() {
-    console.log("👑 [ADMIN v3.0] Inicializando CRM e Histórico...");
+    console.log("👑 [ADMIN v3.1] Inicializando CRM com Edição/Exclusão...");
 
     const adminBtn = document.getElementById('adminPanelBtn');
     const adminModal = document.getElementById('adminModal');
@@ -44,8 +44,7 @@ export async function initializeAdminPanel() {
     if (searchInput) searchInput.addEventListener('input', (e) => filterUsers(e.target.value));
     if (createBtn) createBtn.addEventListener('click', handleCreateButton);
 
-    // Listeners do Novo Modal de Detalhes (CRM)
-    // Serão ativados apenas quando o modal existir no DOM (Passo 2)
+    // Listeners do Modal de Detalhes
     const closeDetailsBtn = document.getElementById('closeClientDetailsBtn');
     if (closeDetailsBtn) {
         closeDetailsBtn.addEventListener('click', () => {
@@ -61,7 +60,6 @@ async function loadUsers() {
     renderLoading(listBody);
 
     try {
-        // Puxa tudo da coleção companies
         const q = query(collection(db, "companies"));
         const querySnapshot = await getDocs(q);
         
@@ -86,13 +84,11 @@ async function loadUsers() {
                 lastAccess: data.lastAccess ? new Date(data.lastAccess.seconds * 1000) : null,
                 dueDate: data.dueDate || null,
                 isLifetime: data.isLifetime || false,
-                // Novos Campos v3
                 paymentHistory: data.paymentHistory || [],
                 internalNotes: data.internalNotes || ""
             });
         });
 
-        // Ordena por criação (mais novos primeiro)
         usersCache.sort((a, b) => b.createdAt - a.createdAt);
         renderTable(usersCache);
 
@@ -119,7 +115,6 @@ function renderTable(users) {
         
         const subStatus = calculateSubscriptionStatus(user.dueDate, user.isLifetime);
         
-        // Formatação Visual
         const lastAccessText = user.lastAccess 
             ? user.lastAccess.toLocaleDateString('pt-BR') + ' ' + user.lastAccess.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})
             : '<span class="text-gray-300">Nunca acessou</span>';
@@ -129,10 +124,9 @@ function renderTable(users) {
             ? `<span class="text-orange-600 font-bold" title="Edite o nome deste usuário antigo">${user.name} ⚠️</span>` 
             : `<span class="font-bold text-gray-900">${user.name}</span>`;
 
-        // Botão de Renovação Rápida (Só aparece se tiver data definida e não for vitalício)
         const showRenewBtn = user.dueDate && !user.isLifetime;
         const renewBtnHtml = showRenewBtn 
-            ? `<button class="renew-btn ml-2 text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 p-1 rounded transition" title="Confirmar Pagamento e Renovar +1 Mês" data-id="${user.id}">
+            ? `<button class="renew-btn ml-2 text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 p-1 rounded transition" title="Renovar +1 Mês" data-id="${user.id}">
                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                </button>`
             : '';
@@ -214,7 +208,7 @@ function renderTable(users) {
 // --- LISTENERS DINÂMICOS ---
 
 function attachDynamicListeners() {
-    // Listeners existentes...
+    // Listeners padrão
     document.querySelectorAll('.duedate-input').forEach(input => {
         input.addEventListener('change', async (e) => {
             await updateField(e.target.dataset.id, 'dueDate', e.target.value);
@@ -226,7 +220,7 @@ function attachDynamicListeners() {
         toggle.addEventListener('change', async (e) => {
             const id = e.target.dataset.id;
             await updateField(id, 'isLifetime', e.target.checked);
-            loadUsers(); // Recarrega para atualizar UI do botão renovar
+            loadUsers(); 
         });
     });
 
@@ -263,9 +257,7 @@ function attachDynamicListeners() {
         });
     });
 
-    // --- NOVOS LISTENERS v3 ---
-
-    // 1. Renovação Rápida
+    // Listeners V3 (CRM)
     document.querySelectorAll('.renew-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const id = e.target.closest('button').dataset.id;
@@ -273,7 +265,6 @@ function attachDynamicListeners() {
         });
     });
 
-    // 2. Ver Detalhes (Dossiê)
     document.querySelectorAll('.view-details-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const id = e.target.closest('button').dataset.id;
@@ -292,44 +283,38 @@ async function renewSubscription(companyId) {
     }
 
     const currentValue = prompt("Confirmar pagamento e renovar por 1 mês?\n\nInforme o valor pago (para o histórico):", "0,00");
-    if (currentValue === null) return; // Cancelou
+    if (currentValue === null) return;
 
     try {
-        // 1. Calcular nova data (+1 Mês)
         const [y, m, d] = user.dueDate.split('-').map(Number);
-        const currentDueDate = new Date(y, m - 1, d); // Mês 0-11
+        const currentDueDate = new Date(y, m - 1, d);
         
-        // Adiciona 1 mês
         const newDateObj = new Date(currentDueDate);
         newDateObj.setMonth(newDateObj.getMonth() + 1);
         
-        // Formata YYYY-MM-DD
         const newDueDateStr = newDateObj.toISOString().split('T')[0];
 
-        // 2. Prepara histórico
         const historyEntry = {
             date: new Date().toISOString(),
             amount: currentValue,
-            admin: "Admin", // Pode ser dinâmico se tiver auth do admin
+            admin: "Admin",
             type: "Renovação Mensal"
         };
 
-        // 3. Atualiza Firebase
         const ref = doc(db, "companies", companyId);
         await updateDoc(ref, {
             dueDate: newDueDateStr,
-            isBlocked: false, // Desbloqueia automaticamente
+            isBlocked: false,
             paymentHistory: arrayUnion(historyEntry)
         });
 
-        // 4. Atualiza UI Local
         user.dueDate = newDueDateStr;
         user.isBlocked = false;
         if (!user.paymentHistory) user.paymentHistory = [];
         user.paymentHistory.push(historyEntry);
 
         alert(`✅ Renovado com sucesso!\n\nNova data: ${newDueDateStr.split('-').reverse().join('/')}`);
-        loadUsers(); // Recarrega para garantir
+        loadUsers();
 
     } catch (error) {
         console.error("Erro na renovação:", error);
@@ -341,47 +326,67 @@ async function openClientDetails(companyId) {
     const user = usersCache.find(u => u.id === companyId);
     if (!user) return;
 
-    // Elementos do Modal (Serão criados no Passo 2, mas o JS precisa referenciá-los)
     const modal = document.getElementById('adminClientModal');
-    if (!modal) {
-        alert("Erro: O modal de detalhes não foi encontrado no HTML (Passo 2 pendente).");
-        return;
-    }
+    if (!modal) return;
 
-    // Preencher Cabeçalho
+    // Preenche Cabeçalho
     document.getElementById('detailCompanyName').textContent = user.name;
     document.getElementById('detailCompanyId').textContent = user.id;
     document.getElementById('detailCompanyEmail').textContent = user.email;
 
-    // Preencher Tabela de Histórico
+    // Renderiza Tabela Histórico
     const historyBody = document.getElementById('detailHistoryList');
     historyBody.innerHTML = '';
     
     if (user.paymentHistory && user.paymentHistory.length > 0) {
-        // Ordena histórico do mais recente pro mais antigo
+        // Ordena para exibir
         const sortedHistory = [...user.paymentHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
         
-        sortedHistory.forEach(h => {
+        sortedHistory.forEach((h) => {
             const hRow = document.createElement('tr');
-            hRow.className = "border-b text-xs";
-            const dateStr = new Date(h.date).toLocaleDateString('pt-BR');
+            hRow.className = "border-b text-xs hover:bg-gray-50 transition";
+            const dateStr = new Date(h.date).toLocaleDateString('pt-BR') + ' ' + new Date(h.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+            
+            // Usamos h.date como identificador único
             hRow.innerHTML = `
                 <td class="p-2 text-gray-600">${dateStr}</td>
                 <td class="p-2 font-bold text-green-700">R$ ${h.amount}</td>
                 <td class="p-2 text-gray-500">${h.type || 'Renovação'}</td>
-                <td class="p-2 text-gray-400 text-right">${h.admin || 'System'}</td>
+                <td class="p-2 text-right flex items-center justify-end gap-2">
+                    <button class="edit-payment-btn text-blue-400 hover:text-blue-600 p-1" title="Editar Valor" data-date="${h.date}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                    <button class="delete-payment-btn text-red-400 hover:text-red-600 p-1" title="Excluir Lançamento" data-date="${h.date}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                </td>
             `;
             historyBody.appendChild(hRow);
         });
+
+        // Attach listeners para os botões da tabela (dentro do modal)
+        historyBody.querySelectorAll('.delete-payment-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const targetDate = btn.dataset.date;
+                await deletePaymentEntry(companyId, targetDate);
+            });
+        });
+
+        historyBody.querySelectorAll('.edit-payment-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const targetDate = btn.dataset.date;
+                await editPaymentEntry(companyId, targetDate);
+            });
+        });
+
     } else {
         historyBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs italic">Nenhum histórico registrado.</td></tr>`;
     }
 
-    // Preencher Notas Internas
+    // Notas Internas
     const notesArea = document.getElementById('detailInternalNotes');
     notesArea.value = user.internalNotes || "";
     
-    // Listener para Salvar Notas (Debounce: Salva 1s após parar de digitar)
     let typingTimer;
     notesArea.oninput = () => {
         clearTimeout(typingTimer);
@@ -398,8 +403,61 @@ async function openClientDetails(companyId) {
         }, 1000);
     };
 
-    // Abrir Modal
     modal.classList.remove('hidden');
+}
+
+// --- FUNÇÕES DE EDIÇÃO/EXCLUSÃO DE HISTÓRICO ---
+
+async function deletePaymentEntry(companyId, targetDate) {
+    if (!confirm("Tem certeza que deseja EXCLUIR este registro de pagamento?\n\nEssa ação é irreversível.")) return;
+
+    try {
+        const user = usersCache.find(u => u.id === companyId);
+        // Filtra removendo o item com a data exata
+        const newHistory = user.paymentHistory.filter(h => h.date !== targetDate);
+
+        // Atualiza no banco (Substitui o array todo pelo novo)
+        const ref = doc(db, "companies", companyId);
+        await updateDoc(ref, { paymentHistory: newHistory });
+
+        // Atualiza cache e UI
+        user.paymentHistory = newHistory;
+        openClientDetails(companyId); // Recarrega o modal para ver a mudança
+
+    } catch (error) {
+        console.error("Erro ao excluir pagamento:", error);
+        alert("Erro ao excluir pagamento.");
+    }
+}
+
+async function editPaymentEntry(companyId, targetDate) {
+    const user = usersCache.find(u => u.id === companyId);
+    const item = user.paymentHistory.find(h => h.date === targetDate);
+    
+    if (!item) return;
+
+    const newVal = prompt("Editar valor do pagamento:", item.amount);
+    if (newVal === null || newVal.trim() === "") return;
+
+    try {
+        // Cria novo array com o item modificado
+        const newHistory = user.paymentHistory.map(h => {
+            if (h.date === targetDate) {
+                return { ...h, amount: newVal }; // Mantém data, muda valor
+            }
+            return h;
+        });
+
+        const ref = doc(db, "companies", companyId);
+        await updateDoc(ref, { paymentHistory: newHistory });
+
+        user.paymentHistory = newHistory;
+        openClientDetails(companyId); // Recarrega UI
+
+    } catch (error) {
+        console.error("Erro ao editar pagamento:", error);
+        alert("Erro ao editar valor.");
+    }
 }
 
 // --- FUNÇÕES AUXILIARES ---
@@ -499,7 +557,6 @@ function refreshRowUI(id, dueDateValue, isLifetimeValue) {
     const subStatus = calculateSubscriptionStatus(dueDateValue, finalLifetime);
     badgeContainer.innerHTML = getBadgeHtml(subStatus);
     
-    // Atualiza visibilidade do botão de renovação
     const row = badgeContainer.closest('tr');
     const renewBtn = row.querySelector('.renew-btn');
     if (renewBtn) {
