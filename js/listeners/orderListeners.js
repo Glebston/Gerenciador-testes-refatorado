@@ -1,10 +1,10 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.25.2 - WHATSAPP LINK FIX)
+// MÓDULO ORDER LISTENERS (v5.27.0 - PRODUCTION OS CONNECTED)
 // Responsabilidade: Capturar eventos e conectar UI <-> Services
 // ==========================================================
 
-import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, shareOrderPdf } from '../utils.js';
+import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf, shareOrderPdf } from '../utils.js';
 
 /**
  * Coleta os dados do formulário do pedido.
@@ -268,6 +268,10 @@ export function initializeOrderListeners(UI, deps) {
         
         if (btn.id === 'comprehensivePdfBtn') {
             generateComprehensivePdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
+        }
+        
+        if (btn.id === 'productionPdfBtn') {
+            generateProductionOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
         
         if (btn.id === 'sharePdfBtn') {
