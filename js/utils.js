@@ -2,6 +2,14 @@
 // =========================================================================
 // v5.27.0 - PRODUCTION OS SUPPORT (BLIND PDF)
 // =========================================================================
+import { 
+    getFirestore, 
+    collectionGroup, 
+    getDocs, 
+    updateDoc 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+import { db } from './firebaseConfig.js';
 import { jsPDF } from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm";
 import autoTable from "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/+esm";
 
@@ -770,5 +778,47 @@ export const generateReceiptPdf = async (orderData, userCompanyName, showInfoMod
     } catch (error) {
         console.error("Erro ao gerar PDF do Recibo:", error);
         showInfoModal("Não foi possível gerar o PDF do recibo. Ocorreu um erro interno.");
+    }
+};
+// --- FERRAMENTA DE MIGRAÇÃO (USO ÚNICO) ---
+export const runDatabaseMigration = async (showInfoModal) => {
+    const confirm = window.confirm("ATENÇÃO: Isso vai verificar todos os pedidos do sistema e adicionar o campo ID interno neles. Deseja continuar?");
+    if (!confirm) return;
+
+    showInfoModal("Iniciando reparo do banco de dados... Por favor aguarde.");
+    console.log("--- INICIANDO MIGRAÇÃO ---");
+
+    try {
+        // Busca TODOS os pedidos de todas as empresas
+        const q = collectionGroup(db, 'orders');
+        const snapshot = await getDocs(q);
+        
+        let updatedCount = 0;
+        let batchPromises = [];
+
+        snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            // Verifica se falta o campo 'id' ou se ele está vazio
+            if (!data.id) {
+                console.log(`Corrigindo pedido: ${docSnap.id}`);
+                // Atualiza apenas o campo ID com o código do documento
+                const updatePromise = updateDoc(docSnap.ref, { id: docSnap.id })
+                    .then(() => console.log(`-> Sucesso: ${docSnap.id}`))
+                    .catch(e => console.error(`-> Erro: ${docSnap.id}`, e));
+                
+                batchPromises.push(updatePromise);
+                updatedCount++;
+            }
+        });
+
+        await Promise.all(batchPromises);
+        
+        const msg = `Migração concluída! ${updatedCount} pedidos foram corrigidos.`;
+        console.log(msg);
+        showInfoModal(msg);
+
+    } catch (error) {
+        console.error("Erro fatal na migração:", error);
+        showInfoModal("Erro ao rodar migração. Veja o console (F12).");
     }
 };
