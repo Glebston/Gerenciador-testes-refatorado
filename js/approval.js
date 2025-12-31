@@ -1,6 +1,6 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.0.1 - FIX IMPORT)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.0.2 - AWAITING APPROVAL SUPPORT)
 // Responsabilidade: Renderizar pedido para cliente final
 // e gerenciar interações de Aprovação/Ajuste.
 // ==========================================================
@@ -110,15 +110,18 @@ const renderOrder = (order) => {
     DOM.deliveryDate.textContent = formatDate(order.deliveryDate);
     
     // Status Visual
+    // Adicionado mapeamento para 'Aguardando Aprovação'
     const statusMap = {
-        'Pendente': { color: 'bg-yellow-100 text-yellow-800', label: 'Aguardando Aprovação' },
+        'Pendente': { color: 'bg-yellow-100 text-yellow-800', label: 'Novo / Pendente' },
+        'Aguardando Aprovação': { color: 'bg-cyan-100 text-cyan-800', label: 'Aguardando Sua Aprovação' }, // Visual Ciano
         'Aprovado pelo Cliente': { color: 'bg-green-100 text-green-800', label: 'Aprovado' },
         'Alteração Solicitada': { color: 'bg-red-100 text-red-800', label: 'Alteração Solicitada' },
         'Em Produção': { color: 'bg-blue-100 text-blue-800', label: 'Em Produção' },
         'Entregue': { color: 'bg-gray-100 text-gray-800', label: 'Entregue' }
     };
     
-    const statusConfig = statusMap[order.orderStatus] || statusMap['Pendente'];
+    // Fallback seguro se o status não estiver mapeado
+    const statusConfig = statusMap[order.orderStatus] || { color: 'bg-gray-100 text-gray-800', label: order.orderStatus };
     DOM.headerStatus.className = `text-xs font-bold uppercase px-2 py-1 rounded ${statusConfig.color}`;
     DOM.headerStatus.textContent = statusConfig.label;
 
@@ -187,19 +190,34 @@ const renderOrder = (order) => {
         DOM.obs.className = "text-gray-700 text-sm bg-yellow-50 p-3 rounded-lg border border-yellow-100";
     }
 
-    // E. Controle do Footer
-    const isActionable = ['Pendente', 'Alteração Solicitada', 'Aprovado pelo Cliente'].includes(order.orderStatus);
+    // E. Controle do Footer (Ação)
+    // AQUI ESTÁ A CORREÇÃO: Permitimos interação também se for 'Aguardando Aprovação'
+    const isActionable = [
+        'Pendente', 
+        'Aguardando Aprovação', // <--- Permite aprovar/rejeitar
+        'Alteração Solicitada'  // Permite ver os botões caso o cliente mude de ideia antes da sua edição
+    ].includes(order.orderStatus);
     
     if (isActionable) {
         DOM.loading.classList.add('hidden');
         DOM.content.classList.remove('hidden');
-        DOM.footer.classList.remove('hidden');
+        DOM.footer.classList.remove('hidden'); // Exibe os botões
     } else {
         DOM.loading.classList.add('hidden');
         DOM.content.classList.remove('hidden');
+        DOM.footer.classList.add('hidden'); // Esconde os botões
+        
+        // Mensagem de Bloqueio (Caso já aprovado ou finalizado)
         const alertDiv = document.createElement('div');
+        const statusLabel = statusMap[order.orderStatus] ? statusMap[order.orderStatus].label : order.orderStatus;
+        
         alertDiv.className = "bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm text-center mb-4";
-        alertDiv.innerHTML = `<i class="fa-solid fa-lock mr-2"></i>Este pedido já está em <strong>${order.orderStatus}</strong>.`;
+        alertDiv.innerHTML = `<i class="fa-solid fa-lock mr-2"></i>Este pedido já está em: <strong>${statusLabel}</strong>.`;
+        
+        // Remove alertas antigos para não acumular
+        const existingAlert = DOM.content.querySelector('.bg-blue-50');
+        if (existingAlert) existingAlert.remove();
+        
         DOM.content.prepend(alertDiv);
     }
 };
