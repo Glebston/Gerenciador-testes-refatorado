@@ -1,10 +1,9 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.28.0 - DROPDOWN & APPROVAL LINK)
-// Responsabilidade: Capturar eventos e conectar UI <-> Services
+// MÓDULO ORDER LISTENERS (v5.30.0 - STABLE + MIGRATION TOOL)
 // ==========================================================
 
-import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf } from '../utils.js';
+import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf, runDatabaseMigration } from '../utils.js';
 
 /**
  * Coleta os dados do formulário do pedido.
@@ -33,6 +32,7 @@ function collectFormData(UI) {
         paymentFinStatus: 'pago'
     };
     
+    // Coleta Peças
     UI.DOM.partsContainer.querySelectorAll('.part-item').forEach(p => {
         const id = p.dataset.partId;
         const part = { type: p.querySelector('.part-type').value, material: p.querySelector('.part-material').value, colorMain: p.querySelector('.part-color-main').value, partInputType: p.dataset.partType, sizes: {}, details: [], specifics: [], unitPriceStandard: 0, unitPriceSpecific: 0, unitPrice: 0 };
@@ -57,6 +57,17 @@ export function initializeOrderListeners(UI, deps) {
 
     const { getState, setState, getOptionsFromStorage, services, userCompanyName } = deps;
 
+    // --- GATILHO SECRETO DE MIGRAÇÃO ---
+    // Clique no título do modal segurando SHIFT para rodar a correção
+    if (UI.DOM.modalTitle) {
+        UI.DOM.modalTitle.addEventListener('click', (e) => {
+            if (e.shiftKey) {
+                runDatabaseMigration(UI.showInfoModal);
+            }
+        });
+    }
+    // -----------------------------------
+
     UI.DOM.addOrderBtn.addEventListener('click', () => { 
         setState({ partCounter: 0 }); 
         UI.resetForm(); 
@@ -76,8 +87,21 @@ export function initializeOrderListeners(UI, deps) {
             const orderData = collectFormData(UI); 
             orderData.mockupUrls.push(...newUrls);
             
-            const orderId = UI.DOM.orderId.value;
+            // Lógica Simplificada e Robusta
+            let orderId = UI.DOM.orderId.value;
+            
+            // Se estamos EDITANDO, garantimos que o ID vai junto para ser salvo no corpo do doc também
+            if (orderId) {
+                orderData.id = orderId;
+            }
+
+            // Salva o pedido
             const savedOrderId = await services.saveOrder(orderData, orderId); 
+            
+            // Se foi um pedido NOVO, o 'services.saveOrder' retorna o ID novo.
+            // Para garantir que o campo 'id' exista no documento novo, podemos fazer um update silencioso
+            // OU confiar que o próximo save/migração resolva. 
+            // Para estabilidade agora, vamos deixar o saveOrder padrão e usar a migração para corrigir legados.
             
             const clientName = orderData.clientName;
             const existingTransactions = services.getTransactionsByOrderId ? services.getTransactionsByOrderId(savedOrderId) : [];
@@ -122,22 +146,50 @@ export function initializeOrderListeners(UI, deps) {
 
         } catch (error) { 
             console.error("Erro ao salvar pedido:", error);
-            UI.showInfoModal('Ocorreu um erro ao salvar o pedido. Por favor, verifique os dados e tente novamente.'); 
+            // Mensagem mais detalhada para debug
+            UI.showInfoModal(`Erro ao salvar: ${error.message || 'Verifique o console'}`); 
         } finally { 
             UI.DOM.saveBtn.disabled = false; 
             UI.DOM.uploadIndicator.classList.add('hidden'); 
         }
     });
 
+    // LISTENERS DA LISTA DE PEDIDOS (Grid/Kanban)
     UI.DOM.ordersList.addEventListener('click', async (e) => {
         const btn = e.target.closest('button');
-        if (!btn || !btn.dataset.id) return;
+        if (!btn) return;
 
+        // --- MENU DROPDOWN ---
+        if (btn.id === 'documentsBtn') {
+            e.stopPropagation(); 
+            const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
+            if(menu) menu.classList.toggle('hidden');
+            return; 
+        }
+        
+        // Fecha menu ao clicar em qualquer outra coisa
+        const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
+        if (menu && !menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+        }
+
+        // --- AÇÕES ---
         const id = btn.dataset.id;
-        const order = services.getOrderById(id);
-        if (!order) return;
+        
+        // Botões gerais do modal View (sem ID no botão as vezes)
+        if (btn.id === 'closeViewBtn') { 
+            UI.hideViewModal();
+            UI.DOM.viewModal.innerHTML = ''; 
+            return;
+        }
 
-        if (btn.classList.contains('edit-btn')) {
+        // Se o botão requer ID e não tem, sai
+        if (!id && !btn.id.includes('Pdf')) return;
+
+        // Tenta buscar o pedido (se tiver ID)
+        const order = id ? services.getOrderById(id) : null;
+
+        if (btn.classList.contains('edit-btn') && order) {
             let { partCounter } = getState();
             partCounter = 0;
             const transactions = services.getTransactionsByOrderId ? services.getTransactionsByOrderId(id) : [];
@@ -149,7 +201,7 @@ export function initializeOrderListeners(UI, deps) {
             setState({ partCounter });
             UI.showOrderModal();
             
-        } else if (btn.classList.contains('replicate-btn')) {
+        } else if (btn.classList.contains('replicate-btn') && order) {
             let { partCounter } = getState();
             partCounter = 0;
             partCounter = UI.populateFormForEdit(order, partCounter);
@@ -177,11 +229,12 @@ export function initializeOrderListeners(UI, deps) {
                       }
                   }
               });
-        } else if (btn.classList.contains('view-btn')) {
+        } else if (btn.classList.contains('view-btn') && order) {
             UI.viewOrder(order);
             UI.showViewModal();
             
-        } else if (btn.classList.contains('settle-and-deliver-btn')) {
+        } else if (btn.classList.contains('settle-and-deliver-btn') && order) {
+            // Lógica de quitar e entregar mantida
             try {
                 let totalValue = 0;
                 (order.parts || []).forEach(p => {
@@ -198,7 +251,7 @@ export function initializeOrderListeners(UI, deps) {
                 const adiantamentoExistente = order.downPayment || 0;
                 const valorRestante = totalValue - adiantamentoExistente;
 
-                const updatedOrderData = { ...order };
+                const updatedOrderData = { ...order, id: id }; // Garante ID
                 updatedOrderData.downPayment = totalValue; 
                 updatedOrderData.orderStatus = 'Entregue';
 
@@ -257,43 +310,17 @@ export function initializeOrderListeners(UI, deps) {
         }
     });
 
+    // LISTENER ESPECÍFICO DO MODAL DE DETALHES (VIEW)
     UI.DOM.viewModal.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
+        if (!btn) return;
         
-        // Se clicar fora ou em algo que não é botão, verifica se precisa fechar menu
-        if (!btn) {
-            // (Opcional) Poderia fechar o menu aqui se clicar no fundo
-            return;
-        }
-
-        // --- LÓGICA DO MENU DROPDOWN ---
-        
-        // 1. Toggle do Menu (Abrir/Fechar)
-        if (btn.id === 'documentsBtn') {
-            e.stopPropagation(); // Evita bolha que poderia fechar imediatamente
-            const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
-            if(menu) menu.classList.toggle('hidden');
-            return; 
-        }
-
-        // 2. Fechar menu se clicar em qualquer outra opção
-        const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
-        if (menu && !menu.classList.contains('hidden')) {
-            menu.classList.add('hidden');
-        }
-
-        // --- AÇÕES DOS BOTÕES ---
-
-        if (btn.id === 'closeViewBtn') { 
-            UI.hideViewModal();
-            UI.DOM.viewModal.innerHTML = ''; 
-        }
+        // Ações que independem de orderId ou já possuem no dataset
         
         if (btn.id === 'comprehensivePdfBtn') {
             generateComprehensivePdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
         
-        // NOVA AÇÃO: Gerar OS de Produção
         if (btn.id === 'productionPdfBtn') {
             generateProductionOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
@@ -311,12 +338,9 @@ export function initializeOrderListeners(UI, deps) {
             const company = userCompanyName(); 
             const firstName = order.clientName.split(' ')[0]; 
 
-            // Geração Automática do Link de Aprovação
-            // Pega a URL base atual (ex: https://usuario.github.io/paglucro) e adiciona o arquivo
             const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
             const approvalLink = `${baseUrl}/aprovacao.html?id=${order.id}`;
 
-            // Nova Mensagem Elegante
             const message = `Olá ${firstName}, aqui é da ${company}. Segue o link para conferência e aprovação do layout do seu pedido: ${approvalLink} . Por favor, confira os nomes e tamanhos. Qualquer dúvida, estou à disposição!`;
 
             const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
