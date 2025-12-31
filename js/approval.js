@@ -1,28 +1,24 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.0.0)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.0.1 - FIX IMPORT)
 // Responsabilidade: Renderizar pedido para cliente final
 // e gerenciar interações de Aprovação/Ajuste.
 // ==========================================================
 
-import { firebaseConfig } from './firebaseConfig.js';
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+// 1. Importamos o banco de dados PRONTO do seu arquivo de configuração
+import { db } from './firebaseConfig.js'; 
+
+// 2. Importamos apenas as ferramentas necessárias da MESMA versão do seu projeto (11.6.1)
 import { 
-    getFirestore, 
     collectionGroup, 
     query, 
     where, 
     getDocs, 
     doc, 
-    updateDoc, 
-    serverTimestamp 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    updateDoc 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// --- 1. Inicialização Leve ---
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// --- 2. Referências DOM ---
+// --- Referências DOM ---
 const DOM = {
     loading: document.getElementById('loadingState'),
     error: document.getElementById('errorState'),
@@ -50,9 +46,8 @@ const DOM = {
 let currentOrderDoc = null;
 let currentOrderData = null;
 
-// --- 3. Utilitários de Renderização ---
+// --- Utilitários de Renderização ---
 
-const formatCurrency = (val) => `R$ ${parseFloat(val).toFixed(2)}`;
 const formatDate = (dateStr) => {
     if(!dateStr) return '--';
     const [y, m, d] = dateStr.split('-');
@@ -69,7 +64,7 @@ const showModal = (htmlContent, autoClose = false) => {
 
 const closeModal = () => DOM.modal.classList.add('hidden');
 
-// --- 4. Lógica Principal (Load Order) ---
+// --- Lógica Principal (Load Order) ---
 
 const loadOrder = async () => {
     try {
@@ -107,7 +102,7 @@ const loadOrder = async () => {
     }
 };
 
-// --- 5. Renderização ---
+// --- Renderização ---
 
 const renderOrder = (order) => {
     // A. Cabeçalho
@@ -153,7 +148,7 @@ const renderOrder = (order) => {
         let detailsHtml = `<span class="font-bold text-gray-700">${p.type}</span>`;
         detailsHtml += `<div class="text-xs text-gray-500 mt-0.5">${p.material} | ${p.colorMain}</div>`;
         
-        // Formatação de Tamanhos (Igual ao PDF Cego)
+        // Formatação de Tamanhos
         if (p.partInputType === 'comum') {
             if (p.sizes) {
                 const sizesStr = Object.entries(p.sizes).map(([cat, sizesObj]) => {
@@ -192,19 +187,16 @@ const renderOrder = (order) => {
         DOM.obs.className = "text-gray-700 text-sm bg-yellow-50 p-3 rounded-lg border border-yellow-100";
     }
 
-    // E. Controle do Footer (Botões)
-    // Só mostra botões se o pedido estiver "Pendente" ou "Alteração Solicitada"
-    const isActionable = ['Pendente', 'Alteração Solicitada', 'Aprovado pelo Cliente'].includes(order.orderStatus); // Permite re-aprovar se necessário
+    // E. Controle do Footer
+    const isActionable = ['Pendente', 'Alteração Solicitada', 'Aprovado pelo Cliente'].includes(order.orderStatus);
     
     if (isActionable) {
         DOM.loading.classList.add('hidden');
         DOM.content.classList.remove('hidden');
         DOM.footer.classList.remove('hidden');
     } else {
-        // Se já estiver em produção/entregue, mostra apenas conteúdo, sem botões
         DOM.loading.classList.add('hidden');
         DOM.content.classList.remove('hidden');
-        // Adiciona aviso visual
         const alertDiv = document.createElement('div');
         alertDiv.className = "bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm text-center mb-4";
         alertDiv.innerHTML = `<i class="fa-solid fa-lock mr-2"></i>Este pedido já está em <strong>${order.orderStatus}</strong>.`;
@@ -212,7 +204,7 @@ const renderOrder = (order) => {
     }
 };
 
-// --- 6. Ações (Interatividade) ---
+// --- Ações ---
 
 // APROVAR
 DOM.btnApprove.addEventListener('click', async () => {
@@ -221,14 +213,13 @@ DOM.btnApprove.addEventListener('click', async () => {
     const confirmed = confirm("Tem certeza que deseja APROVAR este layout para produção?");
     if (!confirmed) return;
 
-    // Feedback visual imediato
     DOM.btnApprove.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Processando...';
     DOM.btnApprove.disabled = true;
 
     try {
         await updateDoc(currentOrderDoc, {
             orderStatus: 'Aprovado pelo Cliente',
-            approvalDate: new Date().toISOString(), // Guarda data da aprovação
+            approvalDate: new Date().toISOString(),
             approvalMeta: {
                 userAgent: navigator.userAgent,
                 timestamp: Date.now()
@@ -242,7 +233,7 @@ DOM.btnApprove.addEventListener('click', async () => {
             <button onclick="location.reload()" class="mt-6 bg-gray-800 text-white px-6 py-2 rounded-lg w-full">OK</button>
         `);
         
-        DOM.footer.classList.add('hidden'); // Esconde botões
+        DOM.footer.classList.add('hidden');
 
     } catch (error) {
         console.error("Erro ao aprovar:", error);
@@ -274,7 +265,6 @@ DOM.btnRequest.addEventListener('click', () => {
         btn.disabled = true;
 
         try {
-            // Adiciona a nota de alteração à observação existente
             const newObs = (currentOrderData.generalObservation || '') + `\n\n[Solicitação do Cliente em ${new Date().toLocaleDateString()}]: ${reason}`;
 
             await updateDoc(currentOrderDoc, {
@@ -297,5 +287,5 @@ DOM.btnRequest.addEventListener('click', () => {
     };
 });
 
-// --- 7. Inicializar ---
+// Inicializar
 loadOrder();
