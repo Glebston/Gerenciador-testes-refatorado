@@ -1,6 +1,6 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.30.1 - FIXED SAVE & DROPDOWN)
+// MÓDULO ORDER LISTENERS (v5.30.2 - FIXED CLOSE, ESC & ZOMBIE ID)
 // ==========================================================
 
 import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf, runDatabaseMigration } from '../utils.js';
@@ -73,7 +73,7 @@ export function initializeOrderListeners(UI, deps) {
         UI.showOrderModal(); 
     });
 
-    // --- SALVAR PEDIDO (Lógica Simplificada) ---
+    // --- SALVAR PEDIDO (Lógica Anti-Perda de Dados) ---
     UI.DOM.orderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         UI.DOM.saveBtn.disabled = true; 
@@ -89,15 +89,30 @@ export function initializeOrderListeners(UI, deps) {
             const orderData = collectFormData(UI); 
             orderData.mockupUrls.push(...newUrls);
             
-            let orderId = UI.DOM.orderId.value;
+            // Tratamento robusto do ID (remove espaços em branco invisíveis)
+            let orderId = UI.DOM.orderId.value ? UI.DOM.orderId.value.trim() : '';
             
-            // Se for edição, forçamos o ID no corpo do objeto para garantir consistência
             if (orderId) {
                 orderData.id = orderId;
             }
 
-            // 3. Salvar no Banco (Sem invencionices, apenas salva)
-            const savedOrderId = await services.saveOrder(orderData, orderId); 
+            // 3. Salvar no Banco (Com Fallback para "Pedido Fantasma")
+            let savedOrderId;
+            try {
+                savedOrderId = await services.saveOrder(orderData, orderId);
+            } catch (saveError) {
+                // Se o erro for "No document to update", significa que o ID existe no formulário
+                // mas o pedido foi apagado do banco. Para não perder os dados digitados,
+                // salvamos como um NOVO pedido.
+                if (saveError.message && saveError.message.includes("No document to update")) {
+                    console.warn("Pedido original não encontrado (ID Fantasma). Salvando como novo...");
+                    delete orderData.id; // Remove o ID antigo
+                    savedOrderId = await services.saveOrder(orderData, null); // Força criar novo
+                    UI.showInfoModal("Atenção: O pedido original não foi encontrado no banco (talvez excluído). Seus dados foram salvos em um NOVO pedido para evitar perdas.");
+                } else {
+                    throw saveError; // Se for outro erro, repassa pra frente
+                }
+            }
             
             // 4. Atualizar Finanças
             const clientName = orderData.clientName;
@@ -136,40 +151,34 @@ export function initializeOrderListeners(UI, deps) {
                 );
                 if (generate) {
                     const fullOrderData = { ...orderData, id: savedOrderId };
-                    // Correção: userCompanyName() com parênteses
                     await generateReceiptPdf(fullOrderData, userCompanyName(), UI.showInfoModal);
                 }
             } else {
-                 UI.showInfoModal("Pedido salvo com sucesso!");
+                 if (!savedOrderId) UI.showInfoModal("Pedido salvo com sucesso!"); // Só mostra se não houve aviso de "Novo Pedido" antes
             }
 
         } catch (error) { 
             console.error("Erro ao salvar pedido:", error);
-            UI.showInfoModal(`Erro ao salvar: ${error.message || 'Verifique o console'}`); 
+            UI.showInfoModal(`Erro crítico ao salvar: ${error.message || 'Verifique o console'}`); 
         } finally { 
             UI.DOM.saveBtn.disabled = false; 
             UI.DOM.uploadIndicator.classList.add('hidden'); 
         }
     });
 
-    // --- LISTENERS DA GRID (Botões da Tabela) ---
+    // --- LISTENERS DA GRID (Apenas Abertura/Edição/Exclusão) ---
+    // Removemos daqui a lógica do botão Fechar e do Dropdown para evitar conflitos
     UI.DOM.ordersList.addEventListener('click', async (e) => {
         const btn = e.target.closest('button');
         if (!btn) return;
 
         const id = btn.dataset.id;
         
-        // Ações que não exigem ID
-        if (btn.id === 'closeViewBtn') { 
-            UI.hideViewModal();
-            UI.DOM.viewModal.innerHTML = ''; 
-            return;
-        }
+        // Se clicar no botão de fechar (caso ele estivesse aqui por engano)
+        if (btn.id === 'closeViewBtn') return; // Ignora, pois é tratado no listener do ViewModal
 
-        // Validação básica de ID
         if (!id && !btn.id.includes('Pdf')) return;
 
-        // Busca o pedido na memória
         const order = id ? services.getOrderById(id) : null;
 
         if (btn.classList.contains('edit-btn') && order) {
@@ -217,7 +226,6 @@ export function initializeOrderListeners(UI, deps) {
             UI.showViewModal();
             
         } else if (btn.classList.contains('settle-and-deliver-btn') && order) {
-            // Lógica de quitar e entregar (Mantida idêntica)
             try {
                 let totalValue = 0;
                 (order.parts || []).forEach(p => {
@@ -294,11 +302,18 @@ export function initializeOrderListeners(UI, deps) {
     });
 
     // --- LISTENER DO MODAL DE DETALHES (View/Visualizar) ---
-    // AQUI é onde o botão Documentos (Dropdown) realmente vive
+    // AQUI ficam os botões internos do modal de visualização (Fechar, Dropdown, PDFs)
     UI.DOM.viewModal.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         
-        // 1. Lógica do Dropdown (Documentos)
+        // 1. Botão FECHAR (X) - MOVIDO PARA CÁ
+        if (btn && btn.id === 'closeViewBtn') { 
+            UI.hideViewModal();
+            UI.DOM.viewModal.innerHTML = ''; 
+            return;
+        }
+
+        // 2. Lógica do Dropdown (Documentos)
         if (btn && btn.id === 'documentsBtn') {
             e.stopPropagation(); 
             const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
@@ -315,7 +330,6 @@ export function initializeOrderListeners(UI, deps) {
         if (!btn) return;
         
         // Ações de PDF e WhatsApp
-        // Correção: userCompanyName() com parênteses para passar a string
         if (btn.id === 'comprehensivePdfBtn') {
             generateComprehensivePdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
@@ -351,6 +365,22 @@ export function initializeOrderListeners(UI, deps) {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+    });
+
+    // --- LISTENER GLOBAL DE TECLAS (ESC) ---
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Prioridade: Fecha ViewModal primeiro, depois OrderModal
+            const viewModalOpen = UI.DOM.viewModal && !UI.DOM.viewModal.classList.contains('hidden');
+            const orderModalOpen = UI.DOM.orderModal && !UI.DOM.orderModal.classList.contains('hidden');
+
+            if (viewModalOpen) {
+                UI.hideViewModal();
+                UI.DOM.viewModal.innerHTML = '';
+            } else if (orderModalOpen) {
+                UI.hideOrderModal();
+            }
         }
     });
 
