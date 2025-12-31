@@ -1,10 +1,10 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.27.0 - PRODUCTION OS CONNECTED)
+// MÓDULO ORDER LISTENERS (v5.28.0 - DROPDOWN & APPROVAL LINK)
 // Responsabilidade: Capturar eventos e conectar UI <-> Services
 // ==========================================================
 
-import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf, shareOrderPdf } from '../utils.js';
+import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf } from '../utils.js';
 
 /**
  * Coleta os dados do formulário do pedido.
@@ -259,7 +259,30 @@ export function initializeOrderListeners(UI, deps) {
 
     UI.DOM.viewModal.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
-        if (!btn) return;
+        
+        // Se clicar fora ou em algo que não é botão, verifica se precisa fechar menu
+        if (!btn) {
+            // (Opcional) Poderia fechar o menu aqui se clicar no fundo
+            return;
+        }
+
+        // --- LÓGICA DO MENU DROPDOWN ---
+        
+        // 1. Toggle do Menu (Abrir/Fechar)
+        if (btn.id === 'documentsBtn') {
+            e.stopPropagation(); // Evita bolha que poderia fechar imediatamente
+            const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
+            if(menu) menu.classList.toggle('hidden');
+            return; 
+        }
+
+        // 2. Fechar menu se clicar em qualquer outra opção
+        const menu = UI.DOM.viewModal.querySelector('#documentsMenu');
+        if (menu && !menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+        }
+
+        // --- AÇÕES DOS BOTÕES ---
 
         if (btn.id === 'closeViewBtn') { 
             UI.hideViewModal();
@@ -270,12 +293,9 @@ export function initializeOrderListeners(UI, deps) {
             generateComprehensivePdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
         
+        // NOVA AÇÃO: Gerar OS de Produção
         if (btn.id === 'productionPdfBtn') {
             generateProductionOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
-        }
-        
-        if (btn.id === 'sharePdfBtn') {
-            shareOrderPdf(btn.dataset.id, services.getAllOrders(), userCompanyName(), UI.showInfoModal);
         }
 
         if (btn.id === 'whatsappBtn') {
@@ -290,20 +310,20 @@ export function initializeOrderListeners(UI, deps) {
 
             const company = userCompanyName(); 
             const firstName = order.clientName.split(' ')[0]; 
-            let message = '';
 
-            if (order.orderStatus === 'Entregue') {
-                message = `Olá ${firstName}, seu pedido na ${company} foi finalizado e entregue! Muito obrigado pela preferência. Precisando, é só chamar.`;
-            } else {
-                message = `Olá ${firstName}, aqui é da ${company}. Estou passando para confirmar que recebemos seu pedido e ele já está em produção. Qualquer dúvida, estou à disposição!`;
-            }
+            // Geração Automática do Link de Aprovação
+            // Pega a URL base atual (ex: https://usuario.github.io/paglucro) e adiciona o arquivo
+            const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const approvalLink = `${baseUrl}/aprovacao.html?id=${order.id}`;
+
+            // Nova Mensagem Elegante
+            const message = `Olá ${firstName}, aqui é da ${company}. Segue o link para conferência e aprovação do layout do seu pedido: ${approvalLink} . Por favor, confira os nomes e tamanhos. Qualquer dúvida, estou à disposição!`;
 
             const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
             
-            // v5.25.2 FIX: Método "Anchor Click" para tentar forçar reutilização de aba
             const link = document.createElement('a');
             link.href = url;
-            link.target = 'whatsapp_tab'; // Tenta forçar o nome
+            link.target = 'whatsapp_tab'; 
             link.rel = 'noopener noreferrer';
             document.body.appendChild(link);
             link.click();
