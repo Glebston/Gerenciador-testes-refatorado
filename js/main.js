@@ -455,9 +455,6 @@ async function main() {
 
         initializeNavigationListeners(UI, {
             handleBackup,
-            //
-        initializeNavigationListeners(UI, {
-            handleBackup,
             handleRestore,
             getOrders: getAllOrders,
             getTransactions: getAllTransactions,
@@ -512,4 +509,5 @@ async function main() {
     }
 }
 main();
+
 
