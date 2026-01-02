@@ -7,8 +7,8 @@
 
 // 1. Configurações de Pagamento (EDITÁVEIS)
 const PAYMENT_CONFIG = {
-    pixKey: "SEU_PIX_AQUI", // Ex: "123.456.789-00" ou email
-    pixBeneficiary: "Sua Empresa", // Nome que aparece no banco
+    pixKey: "83999163523", // Ex: "123.456.789-00" ou email
+    pixBeneficiary: "Incial Fardamentos - Uiraúna", // Nome que aparece no banco
     entryPercentage: 0.50 // 50% de entrada necessária
 };
 
