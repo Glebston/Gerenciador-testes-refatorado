@@ -1,6 +1,6 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.1.0 - FINANCE & PIX)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.2.0 - CENTRALIZED CALC)
 // Responsabilidade: Renderizar pedido, calcular totais e 
 // gerenciar fluxo de aprovação com solicitação de PIX.
 // ==========================================================
@@ -14,6 +14,7 @@ const PAYMENT_CONFIG = {
 
 // 2. Importações
 import { db } from './firebaseConfig.js'; 
+import { calculateOrderTotals } from './financialCalculator.js'; // <--- Nova Calculadora Central
 import { 
     collectionGroup, 
     query, 
@@ -73,41 +74,7 @@ const showModal = (htmlContent, autoClose = false) => {
 
 const closeModal = () => DOM.modal.classList.add('hidden');
 
-// Função de Cálculo Financeiro (Espelho do orderService)
-const calculateTotals = (order) => {
-    let grossTotal = 0;
-    
-    if (order.parts && Array.isArray(order.parts)) {
-        order.parts.forEach(part => {
-            // 1. Peças Padrão
-            let standardQty = 0;
-            if (part.sizes) {
-                Object.values(part.sizes).forEach(sizesObj => {
-                    Object.values(sizesObj).forEach(qty => standardQty += (parseInt(qty) || 0));
-                });
-            }
-            const priceStd = parseFloat(part.unitPriceStandard) || parseFloat(part.unitPrice) || 0;
-            grossTotal += (standardQty * priceStd);
-
-            // 2. Peças Específicas
-            const specificQty = (part.specifics || []).length;
-            const priceSpec = parseFloat(part.unitPriceSpecific) || parseFloat(part.unitPrice) || 0;
-            grossTotal += (specificQty * priceSpec);
-
-            // 3. Peças Detalhadas
-            const detailedQty = (part.details || []).length;
-            const priceDet = parseFloat(part.unitPrice) || 0;
-            grossTotal += (detailedQty * priceDet);
-        });
-    }
-
-    const discount = parseFloat(order.discount) || 0;
-    const total = grossTotal - discount;
-    const paid = parseFloat(order.downPayment) || 0;
-    const remaining = total - paid;
-
-    return { grossTotal, discount, total, paid, remaining };
-};
+// A antiga função 'calculateTotals' foi removida daqui e substituída pela importação.
 
 // --- Lógica Principal ---
 
@@ -208,8 +175,9 @@ const renderOrder = (order) => {
         DOM.itemsTable.appendChild(row);
     });
 
-    // 4. --- CARD FINANCEIRO (NOVO) ---
-    const finance = calculateTotals(order);
+    // 4. --- CARD FINANCEIRO (Calculado via Módulo Central) ---
+    const finance = calculateOrderTotals(order); // <--- Chamada Atualizada
+    
     const financeHtml = `
         <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4 space-y-2 text-sm">
             <div class="flex justify-between text-gray-600">
@@ -237,15 +205,13 @@ const renderOrder = (order) => {
         </div>
     `;
     
-    // Injeta o card financeiro APÓS a tabela (usamos insertAdjacentHTML para não quebrar referências)
-    // Remove anterior se houver para evitar duplicação em re-render
     const oldFinance = document.getElementById('financeCardDisplay');
     if(oldFinance) oldFinance.remove();
     
     const financeContainer = document.createElement('div');
     financeContainer.id = 'financeCardDisplay';
     financeContainer.innerHTML = financeHtml;
-    DOM.itemsTable.parentElement.parentElement.after(financeContainer); // Coloca depois da tabela
+    DOM.itemsTable.parentElement.parentElement.after(financeContainer); 
 
     // 5. Observações
     if (order.generalObservation) {
@@ -275,14 +241,14 @@ const renderOrder = (order) => {
 
 // --- Ações ---
 
-// APROVAR (Com Lógica de PIX)
+// APROVAR (Com Lógica de PIX e Módulo Central)
 DOM.btnApprove.addEventListener('click', async () => {
     if (!currentOrderDoc || !currentOrderData) return;
 
-    // 1. Calcular Valores
-    const finance = calculateTotals(currentOrderData);
-    const requiredEntry = finance.total * PAYMENT_CONFIG.entryPercentage; // Meta de entrada
-    const pendingEntry = requiredEntry - finance.paid; // Quanto falta para atingir a meta
+    // 1. Calcular Valores (Módulo Central)
+    const finance = calculateOrderTotals(currentOrderData); // <--- Chamada Atualizada
+    const requiredEntry = finance.total * PAYMENT_CONFIG.entryPercentage;
+    const pendingEntry = requiredEntry - finance.paid;
 
     // 2. Confirmação Inicial
     const confirmed = confirm("Tem certeza que deseja APROVAR este layout?");
@@ -292,20 +258,18 @@ DOM.btnApprove.addEventListener('click', async () => {
     DOM.btnApprove.disabled = true;
 
     try {
-        // Atualiza status no banco
         await updateDoc(currentOrderDoc, {
             orderStatus: 'Aprovado pelo Cliente',
             approvalDate: new Date().toISOString(),
             approvalMeta: { userAgent: navigator.userAgent, timestamp: Date.now() }
         });
 
-        // 3. Decide qual Modal mostrar (PIX ou Sucesso Simples)
-        if (pendingEntry > 0.01) { // Se falta pagar entrada (margem de centavos)
+        // 3. Decide qual Modal mostrar
+        if (pendingEntry > 0.01) { 
             
-            // Link do Zap com mensagem pré-formatada
-            const phone = "55" + currentOrderData.clientPhone.replace(/\D/g, '') || ""; // Tenta pegar do pedido ou usa genérico se vazio
+            const phone = "55" + currentOrderData.clientPhone.replace(/\D/g, '') || ""; 
             const zapMsg = `Olá! Acabei de aprovar meu pedido (${currentOrderData.clientName}). Segue o comprovante do adiantamento de ${formatMoney(pendingEntry)}.`;
-            const zapLink = `https://wa.me/?text=${encodeURIComponent(zapMsg)}`; // Abre lista de contatos ou número específico se tivermos
+            const zapLink = `https://wa.me/?text=${encodeURIComponent(zapMsg)}`; 
 
             showModal(`
                 <div class="text-center">
@@ -334,7 +298,6 @@ DOM.btnApprove.addEventListener('click', async () => {
                 </div>
             `);
 
-            // Lógica do botão Copiar
             document.getElementById('btnCopyPix').onclick = () => {
                 const input = document.getElementById('pixKeyInput');
                 input.select();
@@ -347,7 +310,6 @@ DOM.btnApprove.addEventListener('click', async () => {
             };
 
         } else {
-            // Sucesso Simples (Já estava pago)
             showModal(`
                 <div class="text-center">
                     <div class="text-green-500 text-5xl mb-4"><i class="fa-solid fa-circle-check"></i></div>
