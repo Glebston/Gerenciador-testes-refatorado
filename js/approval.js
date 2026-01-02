@@ -1,25 +1,27 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.2.0 - CENTRALIZED CALC)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.3.0 - DYNAMIC CONFIG)
 // Responsabilidade: Renderizar pedido, calcular totais e 
-// gerenciar fluxo de aprovação com solicitação de PIX.
+// gerenciar fluxo de aprovação com dados da empresa (SaaS).
 // ==========================================================
 
-// 1. Configurações de Pagamento (EDITÁVEIS)
-const PAYMENT_CONFIG = {
-    pixKey: "83999163523", // Ex: "123.456.789-00" ou email
-    pixBeneficiary: "Teste", // Nome que aparece no banco
-    entryPercentage: 0.50 // 50% de entrada necessária
+// 1. Configurações Dinâmicas (Inicia com padrões seguros)
+let companyConfig = {
+    pixKey: "",           // Será preenchido pelo banco
+    pixBeneficiary: "",   // Será preenchido pelo banco
+    entryPercentage: 0.50, // Padrão 50% caso não configurado
+    whatsappNumber: ""    // Para envio do comprovante
 };
 
 // 2. Importações
 import { db } from './firebaseConfig.js'; 
-import { calculateOrderTotals } from './financialCalculator.js'; // <--- Nova Calculadora Central
+import { calculateOrderTotals } from './financialCalculator.js'; 
 import { 
     collectionGroup, 
     query, 
     where, 
     getDocs, 
+    getDoc, // <--- Adicionado para buscar a config
     doc, 
     updateDoc 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -74,9 +76,26 @@ const showModal = (htmlContent, autoClose = false) => {
 
 const closeModal = () => DOM.modal.classList.add('hidden');
 
-// A antiga função 'calculateTotals' foi removida daqui e substituída pela importação.
-
 // --- Lógica Principal ---
+
+const loadCompanySettings = async (companyId) => {
+    if (!companyId) return;
+    try {
+        const configRef = doc(db, `companies/${companyId}/config/payment`);
+        const snap = await getDoc(configRef);
+        
+        if (snap.exists()) {
+            const data = snap.data();
+            // Atualiza a config local com os dados do banco
+            if (data.pixKey) companyConfig.pixKey = data.pixKey;
+            if (data.pixBeneficiary) companyConfig.pixBeneficiary = data.pixBeneficiary;
+            if (data.entryPercentage !== undefined) companyConfig.entryPercentage = parseFloat(data.entryPercentage);
+            if (data.whatsappNumber) companyConfig.whatsappNumber = data.whatsappNumber;
+        }
+    } catch (error) {
+        console.warn("Uso de config padrão (não foi possível carregar do banco):", error);
+    }
+};
 
 const loadOrder = async () => {
     try {
@@ -85,6 +104,7 @@ const loadOrder = async () => {
 
         if (!orderId) throw new Error("ID não fornecido");
 
+        // Busca o pedido em qualquer empresa (Collection Group)
         const q = query(collectionGroup(db, 'orders'), where('id', '==', orderId));
         const querySnapshot = await getDocs(q);
 
@@ -99,6 +119,15 @@ const loadOrder = async () => {
         const docRef = querySnapshot.docs[0];
         currentOrderDoc = docRef.ref;
         currentOrderData = docRef.data();
+
+        // --- MÁGICA SAAS: Descobre a empresa dona do pedido ---
+        // Estrutura: companies/{companyId}/orders/{orderId}
+        // docRef.ref.parent = orders (Collection)
+        // docRef.ref.parent.parent = companies/{companyId} (Document)
+        const companyId = docRef.ref.parent.parent.id;
+        
+        // Carrega as configurações dessa empresa específica
+        await loadCompanySettings(companyId);
         
         renderOrder(currentOrderData);
 
@@ -176,7 +205,7 @@ const renderOrder = (order) => {
     });
 
     // 4. --- CARD FINANCEIRO (Calculado via Módulo Central) ---
-    const finance = calculateOrderTotals(order); // <--- Chamada Atualizada
+    const finance = calculateOrderTotals(order);
     
     const financeHtml = `
         <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4 space-y-2 text-sm">
@@ -241,13 +270,15 @@ const renderOrder = (order) => {
 
 // --- Ações ---
 
-// APROVAR (Com Lógica de PIX e Módulo Central)
+// APROVAR (Com Lógica de PIX Dinâmica)
 DOM.btnApprove.addEventListener('click', async () => {
     if (!currentOrderDoc || !currentOrderData) return;
 
-    // 1. Calcular Valores (Módulo Central)
-    const finance = calculateOrderTotals(currentOrderData); // <--- Chamada Atualizada
-    const requiredEntry = finance.total * PAYMENT_CONFIG.entryPercentage;
+    // 1. Calcular Valores
+    const finance = calculateOrderTotals(currentOrderData);
+    
+    // --> MUDANÇA: Usa a % configurada pela empresa
+    const requiredEntry = finance.total * companyConfig.entryPercentage; 
     const pendingEntry = requiredEntry - finance.paid;
 
     // 2. Confirmação Inicial
@@ -267,9 +298,41 @@ DOM.btnApprove.addEventListener('click', async () => {
         // 3. Decide qual Modal mostrar
         if (pendingEntry > 0.01) { 
             
-            const phone = "55" + currentOrderData.clientPhone.replace(/\D/g, '') || ""; 
             const zapMsg = `Olá! Acabei de aprovar meu pedido (${currentOrderData.clientName}). Segue o comprovante do adiantamento de ${formatMoney(pendingEntry)}.`;
-            const zapLink = `https://wa.me/?text=${encodeURIComponent(zapMsg)}`; 
+            
+            // --> MUDANÇA: Se a empresa configurou WhatsApp, manda direto pra ele
+            let zapLink;
+            if (companyConfig.whatsappNumber) {
+                // Limpa caracteres não numéricos
+                const cleanNumber = companyConfig.whatsappNumber.replace(/\D/g, '');
+                zapLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(zapMsg)}`;
+            } else {
+                // Fallback (Comportamento antigo)
+                zapLink = `https://wa.me/?text=${encodeURIComponent(zapMsg)}`;
+            }
+
+            // Exibição condicional da Chave PIX
+            const pixHtml = companyConfig.pixKey ? `
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
+                    <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
+                    <p class="text-2xl font-bold text-gray-900 mb-3">${formatMoney(pendingEntry)}</p>
+                    
+                    <p class="text-xs font-bold text-gray-500 uppercase mb-1">Chave PIX:</p>
+                    <div class="flex gap-2">
+                        <input type="text" value="${companyConfig.pixKey}" id="pixKeyInput" readonly class="w-full bg-white border p-2 rounded text-sm font-mono text-gray-700">
+                        <button id="btnCopyPix" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 rounded font-bold transition">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                    ${companyConfig.pixBeneficiary ? `<p class="text-center text-xs text-gray-400 mt-1">Beneficiário: ${companyConfig.pixBeneficiary}</p>` : ''}
+                </div>
+            ` : `
+                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-center">
+                    <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
+                    <p class="text-2xl font-bold text-gray-900 mb-2">${formatMoney(pendingEntry)}</p>
+                    <p class="text-xs text-gray-500">Combine o pagamento enviando o comprovante.</p>
+                </div>
+            `;
 
             showModal(`
                 <div class="text-center">
@@ -277,19 +340,7 @@ DOM.btnApprove.addEventListener('click', async () => {
                     <h3 class="text-xl font-bold text-gray-800 mb-1">Arte Aprovada!</h3>
                     <p class="text-gray-600 text-sm mb-4">Para iniciar a produção, é necessário um adiantamento.</p>
                     
-                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
-                        <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
-                        <p class="text-2xl font-bold text-gray-900 mb-3">${formatMoney(pendingEntry)}</p>
-                        
-                        <p class="text-xs font-bold text-gray-500 uppercase mb-1">Chave PIX:</p>
-                        <div class="flex gap-2">
-                            <input type="text" value="${PAYMENT_CONFIG.pixKey}" id="pixKeyInput" readonly class="w-full bg-white border p-2 rounded text-sm font-mono text-gray-700">
-                            <button id="btnCopyPix" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 rounded font-bold transition">
-                                <i class="fa-regular fa-copy"></i>
-                            </button>
-                        </div>
-                        <p class="text-center text-xs text-gray-400 mt-1">Beneficiário: ${PAYMENT_CONFIG.pixBeneficiary}</p>
-                    </div>
+                    ${pixHtml}
 
                     <a href="${zapLink}" target="_blank" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition mb-2 shadow-lg flex items-center justify-center gap-2">
                         <i class="fa-brands fa-whatsapp"></i> Enviar Comprovante
@@ -298,16 +349,19 @@ DOM.btnApprove.addEventListener('click', async () => {
                 </div>
             `);
 
-            document.getElementById('btnCopyPix').onclick = () => {
-                const input = document.getElementById('pixKeyInput');
-                input.select();
-                input.setSelectionRange(0, 99999);
-                navigator.clipboard.writeText(input.value).then(() => {
-                    const btn = document.getElementById('btnCopyPix');
-                    btn.innerHTML = '<i class="fa-solid fa-check text-green-600"></i>';
-                    setTimeout(() => btn.innerHTML = '<i class="fa-regular fa-copy"></i>', 2000);
-                });
-            };
+            // Só ativa o botão de copiar se houver PIX
+            if (companyConfig.pixKey) {
+                document.getElementById('btnCopyPix').onclick = () => {
+                    const input = document.getElementById('pixKeyInput');
+                    input.select();
+                    input.setSelectionRange(0, 99999);
+                    navigator.clipboard.writeText(input.value).then(() => {
+                        const btn = document.getElementById('btnCopyPix');
+                        btn.innerHTML = '<i class="fa-solid fa-check text-green-600"></i>';
+                        setTimeout(() => btn.innerHTML = '<i class="fa-regular fa-copy"></i>', 2000);
+                    });
+                };
+            }
 
         } else {
             showModal(`
