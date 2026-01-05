@@ -1,6 +1,6 @@
 // js/utils.js
 // =========================================================================
-// v5.28.0 - PRODUCTION OS SUPPORT (CENTRALIZED CALCULATION)
+// v5.29.0 - PRODUCTION OS FIX (DYNAMIC HEIGHT)
 // =========================================================================
 import { 
     getFirestore, 
@@ -453,23 +453,53 @@ const _createProductionPdfDocument = async (order, userCompanyName) => {
     });
     yPosition = doc.lastAutoTable.finalY + 8;
 
-    // --- OBSERVAÇÕES TÉCNICAS ---
+    // --- OBSERVAÇÕES TÉCNICAS (MODO DINÂMICO) ---
+    // CORREÇÃO: Layout adaptável para evitar sobreposição
+    
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Observações / Instruções', MARGIN, yPosition);
     yPosition += 5;
-    
-    doc.setDrawColor(150);
-    doc.rect(MARGIN, yPosition, contentWidth, 20); // Caixa para Obs
-    
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    
+    // 1. Quebra o texto em linhas baseadas na largura disponível
     const obsLines = doc.splitTextToSize(order.generalObservation || 'Sem observações adicionais.', contentWidth - 4);
+    
+    // 2. Calcula a altura necessária (aprox 5 unidades por linha + padding de 6)
+    // Mantém no mínimo 20 unidades de altura para ficar estético se o texto for curto
+    const lineHeight = 5;
+    const padding = 6;
+    const boxHeight = Math.max(20, (obsLines.length * lineHeight) + padding);
+
+    // 3. Verificação de segurança: Se a caixa for estourar a página, cria nova página
+    // 270 é um limite seguro antes do rodapé
+    if (yPosition + boxHeight > 270) {
+        doc.addPage();
+        yPosition = MARGIN;
+    }
+    
+    // 4. Desenha o Retângulo com a ALTURA DINÂMICA CALCULADA
+    doc.setDrawColor(150);
+    doc.rect(MARGIN, yPosition, contentWidth, boxHeight); 
+    
+    // 5. Escreve o texto dentro da caixa
     doc.text(obsLines, MARGIN + 2, yPosition + 5);
-    yPosition += 25;
+    
+    // 6. Atualiza o cursor para a próxima seção (Controle de Etapas)
+    // Adiciona a altura do box + um espaçamento de 10
+    yPosition += boxHeight + 10;
 
     // --- CHECKLIST DE PROCESSO (Rodapé de Controle) ---
     // [ ] Corte  [ ] Estampa  [ ] Costura  [ ] Revisão
+    
+    // Verifica novamente se o rodapé cabe (caso a caixa tenha ficado exatamente no limite)
+    if (yPosition > 280) {
+        doc.addPage();
+        yPosition = MARGIN;
+    }
+
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text('Controle de Etapas:', MARGIN, yPosition);
