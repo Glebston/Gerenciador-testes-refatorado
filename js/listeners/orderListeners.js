@@ -1,6 +1,6 @@
 // js/listeners/orderListeners.js
 // ==========================================================
-// MÓDULO ORDER LISTENERS (v5.32.0 - WHATSAPP DROPDOWN)
+// MÓDULO ORDER LISTENERS (v5.33.0 - AUTO REPLY)
 // ==========================================================
 
 import { fileToBase64, uploadToImgBB, generateReceiptPdf, generateComprehensivePdf, generateProductionOrderPdf, runDatabaseMigration } from '../utils.js';
@@ -62,6 +62,29 @@ export function initializeOrderListeners(UI, deps) {
         UI.DOM.modalTitle.addEventListener('click', (e) => {
             if (e.shiftKey) {
                 runDatabaseMigration(UI.showInfoModal);
+            }
+        });
+    }
+
+    // --- AUTOMAÇÃO DE RESPOSTA DE AJUSTE (NOVO) ---
+    if (UI.DOM.orderStatus) {
+        UI.DOM.orderStatus.addEventListener('change', (e) => {
+            // Só executa se mudar para "Aguardando Aprovação"
+            if (e.target.value === 'Aguardando Aprovação') {
+                const today = new Date().toLocaleDateString('pt-BR');
+                const autoMessage = `[Ajuste Realizado em ${today}]: Arte atualizada. Por favor, confira novamente.`;
+                
+                // Evita duplicar a mensagem se já tiver sido inserida hoje na mesma sessão
+                const currentObs = UI.DOM.generalObservation.value;
+                if (!currentObs.includes(autoMessage)) {
+                    // Adiciona uma quebra de linha se já tiver texto
+                    const prefix = currentObs ? '\n\n' : '';
+                    UI.DOM.generalObservation.value = currentObs + prefix + autoMessage;
+                    
+                    // Pequeno feedback visual (piscar a borda verde) para o usuário notar que o texto foi inserido
+                    UI.DOM.generalObservation.classList.add('ring-2', 'ring-green-500', 'transition-all', 'duration-500');
+                    setTimeout(() => UI.DOM.generalObservation.classList.remove('ring-2', 'ring-green-500'), 1000);
+                }
             }
         });
     }
