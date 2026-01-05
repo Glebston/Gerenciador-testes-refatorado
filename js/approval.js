@@ -1,6 +1,6 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.3.0 - DYNAMIC CONFIG)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.3.1 - UX REFINED)
 // Responsabilidade: Renderizar pedido, calcular totais e 
 // gerenciar fluxo de aprovação com dados da empresa (SaaS).
 // ==========================================================
@@ -21,7 +21,7 @@ import {
     query, 
     where, 
     getDocs, 
-    getDoc, // <--- Adicionado para buscar a config
+    getDoc, 
     doc, 
     updateDoc 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -122,8 +122,6 @@ const loadOrder = async () => {
 
         // --- MÁGICA SAAS: Descobre a empresa dona do pedido ---
         // Estrutura: companies/{companyId}/orders/{orderId}
-        // docRef.ref.parent = orders (Collection)
-        // docRef.ref.parent.parent = companies/{companyId} (Document)
         const companyId = docRef.ref.parent.parent.id;
         
         // Carrega as configurações dessa empresa específica
@@ -204,7 +202,7 @@ const renderOrder = (order) => {
         DOM.itemsTable.appendChild(row);
     });
 
-    // 4. --- CARD FINANCEIRO (Calculado via Módulo Central) ---
+    // 4. --- CARD FINANCEIRO ---
     const finance = calculateOrderTotals(order);
     
     const financeHtml = `
@@ -277,7 +275,7 @@ DOM.btnApprove.addEventListener('click', async () => {
     // 1. Calcular Valores
     const finance = calculateOrderTotals(currentOrderData);
     
-    // --> MUDANÇA: Usa a % configurada pela empresa
+    // Usa a % configurada pela empresa
     const requiredEntry = finance.total * companyConfig.entryPercentage; 
     const pendingEntry = requiredEntry - finance.paid;
 
@@ -298,22 +296,12 @@ DOM.btnApprove.addEventListener('click', async () => {
         // 3. Decide qual Modal mostrar
         if (pendingEntry > 0.01) { 
             
-            const zapMsg = `Olá! Acabei de aprovar meu pedido (${currentOrderData.clientName}). Segue o comprovante do adiantamento de ${formatMoney(pendingEntry)}.`;
-            
-            // --> MUDANÇA: Se a empresa configurou WhatsApp, manda direto pra ele
-            let zapLink;
-            if (companyConfig.whatsappNumber) {
-                // Limpa caracteres não numéricos
-                const cleanNumber = companyConfig.whatsappNumber.replace(/\D/g, '');
-                zapLink = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(zapMsg)}`;
-            } else {
-                // Fallback (Comportamento antigo)
-                zapLink = `https://wa.me/?text=${encodeURIComponent(zapMsg)}`;
-            }
+            // --- CÁLCULO VISUAL DA PORCENTAGEM (Ex: 0.5 -> 50) ---
+            const percentDisplay = Math.round(companyConfig.entryPercentage * 100);
 
             // Exibição condicional da Chave PIX
             const pixHtml = companyConfig.pixKey ? `
-                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-2 text-left">
                     <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
                     <p class="text-2xl font-bold text-gray-900 mb-3">${formatMoney(pendingEntry)}</p>
                     
@@ -327,10 +315,10 @@ DOM.btnApprove.addEventListener('click', async () => {
                     ${companyConfig.pixBeneficiary ? `<p class="text-center text-xs text-gray-400 mt-1">Beneficiário: ${companyConfig.pixBeneficiary}</p>` : ''}
                 </div>
             ` : `
-                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-center">
+                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-2 text-center">
                     <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
                     <p class="text-2xl font-bold text-gray-900 mb-2">${formatMoney(pendingEntry)}</p>
-                    <p class="text-xs text-gray-500">Combine o pagamento enviando o comprovante.</p>
+                    <p class="text-xs text-gray-500">Combine o pagamento com nosso atendimento.</p>
                 </div>
             `;
 
@@ -338,14 +326,20 @@ DOM.btnApprove.addEventListener('click', async () => {
                 <div class="text-center">
                     <div class="text-green-500 text-5xl mb-3"><i class="fa-solid fa-circle-check"></i></div>
                     <h3 class="text-xl font-bold text-gray-800 mb-1">Arte Aprovada!</h3>
-                    <p class="text-gray-600 text-sm mb-4">Para iniciar a produção, é necessário um adiantamento.</p>
+                    
+                    <p class="text-gray-600 text-sm mb-4">
+                        Tudo pronto! Para iniciarmos a produção, é necessário o adiantamento de <strong>${percentDisplay}%</strong>.
+                    </p>
                     
                     ${pixHtml}
 
-                    <a href="${zapLink}" target="_blank" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition mb-2 shadow-lg flex items-center justify-center gap-2">
-                        <i class="fa-brands fa-whatsapp"></i> Enviar Comprovante
-                    </a>
-                    <button onclick="location.reload()" class="text-gray-400 text-sm hover:text-gray-600 underline">Fechar</button>
+                    <p class="text-xs text-gray-500 mt-2 mb-6">
+                        Prefere outra forma de pagamento? Combine com nosso atendimento.
+                    </p>
+
+                    <button onclick="location.reload()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg transition shadow-sm">
+                        Fechar
+                    </button>
                 </div>
             `);
 
@@ -364,6 +358,7 @@ DOM.btnApprove.addEventListener('click', async () => {
             }
 
         } else {
+            // Caso o cliente já tenha pago tudo ou o adiantamento necessário
             showModal(`
                 <div class="text-center">
                     <div class="text-green-500 text-5xl mb-4"><i class="fa-solid fa-circle-check"></i></div>
