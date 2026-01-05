@@ -1,6 +1,6 @@
 // js/approval.js
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v1.3.1 - UX REFINED)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v1.3.2 - PIX FIX)
 // Responsabilidade: Renderizar pedido, calcular totais e 
 // gerenciar fluxo de aprovação com dados da empresa (SaaS).
 // ==========================================================
@@ -81,19 +81,32 @@ const closeModal = () => DOM.modal.classList.add('hidden');
 const loadCompanySettings = async (companyId) => {
     if (!companyId) return;
     try {
+        // TENTATIVA 1: Configuração Nova (SaaS)
         const configRef = doc(db, `companies/${companyId}/config/payment`);
         const snap = await getDoc(configRef);
         
         if (snap.exists()) {
             const data = snap.data();
-            // Atualiza a config local com os dados do banco
             if (data.pixKey) companyConfig.pixKey = data.pixKey;
             if (data.pixBeneficiary) companyConfig.pixBeneficiary = data.pixBeneficiary;
             if (data.entryPercentage !== undefined) companyConfig.entryPercentage = parseFloat(data.entryPercentage);
             if (data.whatsappNumber) companyConfig.whatsappNumber = data.whatsappNumber;
         }
+
+        // TENTATIVA 2 (FALLBACK): Se não achou PIX na config, tenta na raiz da empresa (Legado)
+        if (!companyConfig.pixKey) {
+            const companyRef = doc(db, `companies/${companyId}`);
+            const companySnap = await getDoc(companyRef);
+            if (companySnap.exists()) {
+                const data = companySnap.data();
+                // Procura por campos comuns de PIX na raiz
+                if (data.pixKey) companyConfig.pixKey = data.pixKey;
+                if (data.chavePix) companyConfig.pixKey = data.chavePix; // Tenta variação de nome
+                if (data.pixBeneficiary) companyConfig.pixBeneficiary = data.pixBeneficiary;
+            }
+        }
     } catch (error) {
-        console.warn("Uso de config padrão (não foi possível carregar do banco):", error);
+        console.warn("Erro ao carregar configurações:", error);
     }
 };
 
@@ -299,8 +312,11 @@ DOM.btnApprove.addEventListener('click', async () => {
             // --- CÁLCULO VISUAL DA PORCENTAGEM (Ex: 0.5 -> 50) ---
             const percentDisplay = Math.round(companyConfig.entryPercentage * 100);
 
-            // Exibição condicional da Chave PIX
-            const pixHtml = companyConfig.pixKey ? `
+            // Se tiver Pix configurado, MOSTRA. Se não, mostra fallback.
+            // A verificação é simples: se companyConfig.pixKey existir.
+            const hasPix = !!companyConfig.pixKey;
+
+            const pixHtml = hasPix ? `
                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-2 text-left">
                     <p class="text-sm text-gray-700 mb-1">Valor do Adiantamento:</p>
                     <p class="text-2xl font-bold text-gray-900 mb-3">${formatMoney(pendingEntry)}</p>
@@ -343,22 +359,24 @@ DOM.btnApprove.addEventListener('click', async () => {
                 </div>
             `);
 
-            // Só ativa o botão de copiar se houver PIX
-            if (companyConfig.pixKey) {
-                document.getElementById('btnCopyPix').onclick = () => {
-                    const input = document.getElementById('pixKeyInput');
-                    input.select();
-                    input.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(input.value).then(() => {
-                        const btn = document.getElementById('btnCopyPix');
-                        btn.innerHTML = '<i class="fa-solid fa-check text-green-600"></i>';
-                        setTimeout(() => btn.innerHTML = '<i class="fa-regular fa-copy"></i>', 2000);
-                    });
-                };
+            // Só adiciona o listener se houver Pix
+            if (hasPix) {
+                const btnCopy = document.getElementById('btnCopyPix');
+                if (btnCopy) {
+                    btnCopy.onclick = () => {
+                        const input = document.getElementById('pixKeyInput');
+                        input.select();
+                        input.setSelectionRange(0, 99999);
+                        navigator.clipboard.writeText(input.value).then(() => {
+                            btnCopy.innerHTML = '<i class="fa-solid fa-check text-green-600"></i>';
+                            setTimeout(() => btnCopy.innerHTML = '<i class="fa-regular fa-copy"></i>', 2000);
+                        });
+                    };
+                }
             }
 
         } else {
-            // Caso o cliente já tenha pago tudo ou o adiantamento necessário
+            // Caso 100% pago
             showModal(`
                 <div class="text-center">
                     <div class="text-green-500 text-5xl mb-4"><i class="fa-solid fa-circle-check"></i></div>
