@@ -1,11 +1,18 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.28.0 - WHATSAPP DROPDOWN)
-// Responsabilidade: Gerenciar a renderização de tudo 
-// relacionado a Pedidos: Kanban, Cards, Modal de Detalhes.
+// MÓDULO ORDER RENDERER (v5.29.0 - SaaS Lock & External Links)
+// Responsabilidade: Gerenciar a renderização de pedidos,
+// incluindo travas visuais para funcionalidades PRO.
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
+// Importamos auth apenas se precisarmos de funções, mas aqui leremos o plano do cache/storage
+// Assumindo que o main.js ou auth.js salvou o plano no localStorage ao logar.
+
+// Função auxiliar para pegar o plano atual (Padrão: essencial)
+const getUserPlan = () => {
+    return localStorage.getItem('userPlan') || 'essencial';
+};
 
 const getDeliveryCountdown = (deliveryDate) => {
     if (!deliveryDate) return { text: 'Sem data', color: 'gray' };
@@ -307,6 +314,26 @@ const sortSizes = (sizesObject) => {
 
 export const viewOrder = (order) => {
     if (!order) return;
+    
+    // ============================================
+    // LÓGICA DO PLANO SaaS (TRAVAS V2)
+    // ============================================
+    const currentPlan = getUserPlan(); // 'essencial' ou 'pro'
+    const isPro = currentPlan === 'pro';
+
+    // Se for Pro, classe "roxa", senão "cinza"
+    const externalBtnClass = isPro 
+        ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md" 
+        : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200";
+
+    const externalIcon = isPro
+        ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>`;
+
+    const lockBadge = !isPro 
+        ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PRO</span>` 
+        : '';
+    // ============================================
 
     let subTotal = 0;
     let partsHtml = (order.parts || []).map(p => {
@@ -380,9 +407,7 @@ export const viewOrder = (order) => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm mb-4">
                     <div><strong>Telefone:</strong> ${order.clientPhone || 'N/A'}</div>
                     <div><strong>Status:</strong> <span class="font-semibold">${order.orderStatus}</span></div>
-                    <div><strong>Data do Pedido:</strong> ${order.orderDate ? new Date(order.orderDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}` +
-                    // FIX: Adicionada segurança para evitar erro se orderDate for vazio
-                    `</div>
+                    <div><strong>Data do Pedido:</strong> ${order.orderDate ? new Date(order.orderDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}</div>
                     <div><strong>Data de Entrega:</strong> ${order.deliveryDate ? new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}</div>
                 </div>
                 <h3 class="font-bold text-lg mt-4">Peças</h3>
@@ -469,6 +494,31 @@ export const viewOrder = (order) => {
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <div class="relative inline-block text-left group">
+                    <button id="externalActionsBtn" type="button" class="${externalBtnClass} font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors relative" ${!isPro ? 'disabled' : ''}>
+                        ${lockBadge}
+                        ${externalIcon}
+                        Externo
+                        ${isPro ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>` : ''}
+                    </button>
+
+                    ${!isPro ? `
+                    <div class="absolute bottom-full right-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded py-2 px-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 text-center">
+                        Funcionalidade exclusiva do <strong>Plano PRO</strong>.<br>Preenchimento automático pelo cliente.
+                        <div class="absolute top-full right-6 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                    ` : `
+                    <div id="externalMenu" class="hidden absolute right-0 bottom-full mb-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 overflow-hidden">
+                        <div class="py-1" role="menu">
+                            <button id="generateFillLinkBtn" data-id="${order.id}" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                <svg class="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                Link de Preenchimento
+                            </button>
+                        </div>
+                    </div>
+                    `}
                 </div>
 
                 <button id="closeViewBtn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors shadow-sm">Fechar</button>
