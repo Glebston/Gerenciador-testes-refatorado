@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// ORQUESTRADOR CENTRAL (v5.8.0 - SaaS Manager Logic)
+// ORQUESTRADOR CENTRAL (v5.9.0 - SaaS Plan Auto-Detection)
 // ========================================================
 
 async function main() {
@@ -184,6 +184,13 @@ async function main() {
                             .catch(e => console.error("Erro ao limpar mensagem lida:", e));
                     }
 
+                    // 5. [NOVO] DETECÇÃO AUTOMÁTICA DO PLANO SaaS
+                    // ------------------------------------------------------------
+                    const userPlan = companyData.subscription?.planId || 'essencial';
+                    localStorage.setItem('userPlan', userPlan);
+                    console.log(`💎 [SaaS] Plano Detectado: ${userPlan.toUpperCase()}`);
+                    // ------------------------------------------------------------
+
                     // ============================================================
                     // FIM DA LÓGICA DE SEGURANÇA
                     // ============================================================
@@ -193,6 +200,8 @@ async function main() {
                 } else {
                     userCompanyName = user.email; 
                     userBankBalanceConfig = { initialBalance: 0 };
+                    // Fallback para empresas fantasmas
+                    localStorage.setItem('userPlan', 'essencial');
                 }
                 
                 // Configuração da UI após passar pela segurança
@@ -222,7 +231,7 @@ async function main() {
                     UI.DOM.app.classList.remove('hidden');
                     
                     if (isAdminUser) {
-                        console.log("👑 Carregando módulo Admin v2...");
+                        console.log("👑 Carregando módulo Admin v3...");
                         try {
                             const { initializeAdminPanel } = await import(`./admin.js${cacheBuster}`);
                             initializeAdminPanel();
@@ -258,6 +267,9 @@ async function main() {
             document.getElementById('blockedModal').classList.add('hidden');
             document.getElementById('paymentWarningModal').classList.add('hidden');
             
+            // Limpa o cache do plano ao sair
+            localStorage.removeItem('userPlan');
+
             cleanupOrderService();
             cleanupFinanceService();
             cleanupPricingService();
@@ -450,7 +462,6 @@ async function main() {
 
         // Inicialização dos Listeners
         initializeAuthListeners(UI);
-        // --- ADICIONE ESTA LINHA ---
         initConfigListeners(); 
 
         initializeNavigationListeners(UI, {
@@ -509,5 +520,3 @@ async function main() {
     }
 }
 main();
-
-
