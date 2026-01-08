@@ -140,8 +140,8 @@ function renderTable(users) {
         const isPro = user.planId === 'pro';
         const planSelectHtml = `
             <select class="plan-selector text-[10px] font-bold uppercase rounded border-0 py-0.5 px-2 cursor-pointer focus:ring-2 focus:ring-blue-500 shadow-sm ${isPro ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}" data-id="${user.id}">
-                <option value="essencial" ${!isPro ? 'selected' : ''}>Essencial</option>
-                <option value="pro" ${isPro ? 'selected' : ''}>PRO 🚀</option>
+                <option value="essencial" ${!isPro ? 'selected' : ''}>Plano PRO</option>
+<option value="pro" ${isPro ? 'selected' : ''}>PREMIUM 🏆</option>
             </select>
         `;
 
