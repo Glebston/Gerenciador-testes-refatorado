@@ -331,7 +331,7 @@ export const viewOrder = (order) => {
         : `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>`;
 
     const lockBadge = !isPro 
-        ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PRO</span>` 
+        ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PREMIUM</span>` 
         : '';
     // ============================================
 
@@ -506,7 +506,7 @@ export const viewOrder = (order) => {
 
                     ${!isPro ? `
                     <div class="absolute bottom-full right-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded py-2 px-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 text-center">
-                        Funcionalidade exclusiva do <strong>Plano PRO</strong>.<br>Preenchimento automático pelo cliente.
+                        Funcionalidade exclusiva do <strong>Plano PREMIUM</strong>.<br>Preenchimento automático pelo cliente.
                         <div class="absolute top-full right-6 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                     </div>
                     ` : `
