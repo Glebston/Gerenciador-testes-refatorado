@@ -1,15 +1,14 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.29.0 - SaaS Lock & External Links)
+// MÓDULO ORDER RENDERER (v5.30.0 - Premium Link Generator)
 // Responsabilidade: Gerenciar a renderização de pedidos,
-// incluindo travas visuais para funcionalidades PRO.
+// travas visuais e geração de links externos.
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
-// Importamos auth apenas se precisarmos de funções, mas aqui leremos o plano do cache/storage
-// Assumindo que o main.js ou auth.js salvou o plano no localStorage ao logar.
+import { auth } from '../firebaseConfig.js'; // Necessário para pegar o ID da empresa
 
-// Função auxiliar para pegar o plano atual (Padrão: essencial)
+// Função auxiliar para pegar o plano atual do cache
 const getUserPlan = () => {
     return localStorage.getItem('userPlan') || 'essencial';
 };
@@ -62,11 +61,10 @@ const generateOrderCardHTML = (order, viewType) => {
            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M5 3a2 2 0 00-2 2v6a1 1 0 102 0V5h6a1 1 0 100-2H5z" /></svg>
         </button>`;
     
-    // Criamos o elemento DOM em vez de string
     const card = document.createElement('div');
     card.className = "bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow flex flex-col space-y-3 transform hover:-translate-y-1";
     card.dataset.id = order.id;
-    card.dataset.deliveryDate = order.deliveryDate || 'Sem Data'; // Para ordenação no Kanban
+    card.dataset.deliveryDate = order.deliveryDate || 'Sem Data'; 
 
     card.innerHTML = `
         <div class="flex justify-between items-start">
@@ -98,12 +96,9 @@ const generateOrderCardHTML = (order, viewType) => {
     return card;
 };
 
-/**
- * Prepara o container da lista de pedidos (Kanban ou Grid)
- */
 const setupOrderListContainer = (viewType) => {
-    DOM.ordersList.innerHTML = ''; // Limpa
-    DOM.ordersList.className = ''; // Reseta classes
+    DOM.ordersList.innerHTML = ''; 
+    DOM.ordersList.className = ''; 
     if (viewType === 'pending') {
         DOM.ordersList.classList.add('kanban-board');
     } else {
@@ -111,16 +106,12 @@ const setupOrderListContainer = (viewType) => {
     }
 };
 
-/**
- * Procura ou cria uma coluna no Kanban
- */
 const findOrCreateKanbanColumn = (dateKey) => {
     let column = DOM.ordersList.querySelector(`.kanban-column[data-date-key="${dateKey}"]`);
     if (column) {
         return column.querySelector('.kanban-column-content');
     }
 
-    // Coluna não existe, vamos criar
     const formattedDate = dateKey === 'Sem Data' ?
         'Sem Data de Entrega' :
         new Date(dateKey + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -136,7 +127,6 @@ const findOrCreateKanbanColumn = (dateKey) => {
         <div class="kanban-column-content space-y-4"></div>
     `;
 
-    // Insere a coluna na ordem correta
     const allColumns = Array.from(DOM.ordersList.querySelectorAll('.kanban-column'));
     let inserted = false;
     if (dateKey !== 'Sem Data') {
@@ -151,16 +141,12 @@ const findOrCreateKanbanColumn = (dateKey) => {
         }
     }
     if (!inserted) {
-        // Se for "Sem Data" ou mais recente que todas, adiciona no final
         DOM.ordersList.appendChild(column);
     }
     
     return column.querySelector('.kanban-column-content');
 };
 
-/**
- * Atualiza o contador de uma coluna Kanban
- */
 const updateKanbanColumnCounter = (columnContent) => {
     const column = columnContent.closest('.kanban-column');
     if (!column) return;
@@ -169,22 +155,17 @@ const updateKanbanColumnCounter = (columnContent) => {
     const count = columnContent.children.length;
     counter.textContent = count;
     
-    // Se a coluna ficar vazia, remove-a
     if (count === 0) {
         column.remove();
     }
 };
 
-/**
- * Adiciona um card de pedido à UI
- */
 export const addOrderCard = (order, viewType) => {
     const card = generateOrderCardHTML(order, viewType);
     
     if (viewType === 'pending') {
         const dateKey = order.deliveryDate || 'Sem Data';
         const columnContent = findOrCreateKanbanColumn(dateKey);
-        // Insere o card ordenado por nome dentro da coluna
         const cardsInColumn = Array.from(columnContent.querySelectorAll('.bg-white'));
         let inserted = false;
         for (const existingCard of cardsInColumn) {
@@ -199,7 +180,6 @@ export const addOrderCard = (order, viewType) => {
         }
         updateKanbanColumnCounter(columnContent);
     } else {
-        // Na 'delivered' view (grid), insere ordenado por data (mais novo primeiro)
         const allCards = Array.from(DOM.ordersList.querySelectorAll('.bg-white'));
         let inserted = false;
         const orderDate = new Date(order.deliveryDate || 0);
@@ -216,14 +196,10 @@ export const addOrderCard = (order, viewType) => {
         }
     }
     
-    // Remove o "Nenhum pedido" se for o primeiro
     const placeholder = DOM.ordersList.querySelector('.orders-placeholder');
     if (placeholder) placeholder.remove();
 };
 
-/**
- * Atualiza um card de pedido existente na UI
- */
 export const updateOrderCard = (order, viewType) => {
     const existingCard = DOM.ordersList.querySelector(`[data-id="${order.id}"]`);
     if (!existingCard) {
@@ -315,13 +291,9 @@ const sortSizes = (sizesObject) => {
 export const viewOrder = (order) => {
     if (!order) return;
     
-    // ============================================
-    // LÓGICA DO PLANO SaaS (TRAVAS V2)
-    // ============================================
-    const currentPlan = getUserPlan(); // 'essencial' ou 'pro'
+    const currentPlan = getUserPlan(); 
     const isPro = currentPlan === 'pro';
 
-    // Se for Pro, classe "roxa", senão "cinza"
     const externalBtnClass = isPro 
         ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md" 
         : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200";
@@ -333,7 +305,6 @@ export const viewOrder = (order) => {
     const lockBadge = !isPro 
         ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PREMIUM</span>` 
         : '';
-    // ============================================
 
     let subTotal = 0;
     let partsHtml = (order.parts || []).map(p => {
@@ -524,6 +495,37 @@ export const viewOrder = (order) => {
                 <button id="closeViewBtn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors shadow-sm">Fechar</button>
             </div>
         </div>`;
+    
     DOM.viewModal.innerHTML = modalContent;
     DOM.viewModal.classList.remove('hidden');
+
+    // === LÓGICA DO LINK DE PREENCHIMENTO (NOVO v5.30) ===
+    const btnGenerate = document.getElementById('generateFillLinkBtn');
+    if (btnGenerate) {
+        btnGenerate.addEventListener('click', async () => {
+            if (!auth.currentUser) {
+                alert("Erro de autenticação.");
+                return;
+            }
+            
+            const companyId = auth.currentUser.uid;
+            // Monta a URL base removendo 'index.html' se estiver lá
+            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '').replace(/\/$/, '');
+            const fillUrl = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
+
+            try {
+                await navigator.clipboard.writeText(fillUrl);
+                
+                // Feedback visual temporário
+                const originalContent = btnGenerate.innerHTML;
+                btnGenerate.innerHTML = `<span class="text-green-600 font-bold">Link Copiado! ✓</span>`;
+                setTimeout(() => {
+                    btnGenerate.innerHTML = originalContent;
+                }, 2000);
+            } catch (err) {
+                console.error('Erro ao copiar:', err);
+                prompt("Copie o link abaixo:", fillUrl);
+            }
+        });
+    }
 };
