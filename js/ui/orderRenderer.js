@@ -1,12 +1,12 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.30.0 - SaaS Link Generator)
+// MÓDULO ORDER RENDERER (v5.30.1 - SaaS Full Integration)
 // Responsabilidade: Gerenciar a renderização de pedidos,
-// travas visuais PRO e Geração do Link de Preenchimento.
+// travas visuais PRO e Funcionalidade de Menus/Links.
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
-import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // Importado para pegar o UID da empresa
+import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; 
 
 // Função auxiliar para pegar o plano atual (Padrão: essencial)
 const getUserPlan = () => {
@@ -527,14 +527,59 @@ export const viewOrder = (order) => {
     DOM.viewModal.classList.remove('hidden');
 
     // ============================================
-    // NOVA LÓGICA: GERAÇÃO DO LINK (SaaS PREMIUM)
+    // 1. LÓGICA DE INTERFACE (ABRIR/FECHAR MENUS)
+    // ============================================
+    
+    // Função auxiliar para ativar dropdowns
+    const setupDropdown = (btnId, menuId) => {
+        const btn = document.getElementById(btnId);
+        const menu = document.getElementById(menuId);
+        
+        if (btn && menu) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Fecha outros menus abertos para não encavalar
+                document.querySelectorAll('[id$="Menu"]').forEach(m => {
+                    if (m.id !== menuId) m.classList.add('hidden');
+                });
+                // Alterna o atual
+                menu.classList.toggle('hidden');
+            });
+        }
+    };
+
+    // Ativamos os 3 menus do modal
+    setupDropdown('whatsappMenuBtn', 'whatsappMenu');
+    setupDropdown('documentsBtn', 'documentsMenu');
+    setupDropdown('externalActionsBtn', 'externalMenu');
+
+    // Fechar menus ao clicar fora
+    const closeMenusOnClickOutside = (e) => {
+        if (!e.target.closest('button[id$="Btn"]') && !e.target.closest('div[role="menu"]')) {
+            document.querySelectorAll('[id$="Menu"]').forEach(menu => menu.classList.add('hidden'));
+        }
+    };
+    // Removemos listener anterior para evitar duplicação e adicionamos o novo
+    document.removeEventListener('click', closeMenusOnClickOutside);
+    document.addEventListener('click', closeMenusOnClickOutside);
+
+    // Lógica para fechar o Modal
+    const btnClose = document.getElementById('closeViewBtn');
+    if (btnClose) {
+        btnClose.addEventListener('click', () => {
+             DOM.viewModal.classList.add('hidden');
+        });
+    }
+
+    // ============================================
+    // 2. LÓGICA DO PLANO SaaS (GERAÇÃO DO LINK)
     // ============================================
     const btnFill = document.getElementById('generateFillLinkBtn');
     if (btnFill) {
         btnFill.addEventListener('click', async (e) => {
             e.preventDefault();
             
-            // 1. Identificar a empresa (UID)
+            // A. Identificar a empresa (UID)
             const auth = getAuth();
             const companyId = auth.currentUser ? auth.currentUser.uid : null;
 
@@ -543,15 +588,15 @@ export const viewOrder = (order) => {
                 return;
             }
 
-            // 2. Montar o Link Mágico (Funciona em Localhost e Produção)
-            const baseUrl = window.location.origin; // ex: https://paglucro.github.io ou http://127.0.0.1:5500
+            // B. Montar o Link Mágico (Funciona em Localhost e Produção)
+            const baseUrl = window.location.origin; 
             const link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
 
             try {
-                // 3. Copiar para a Área de Transferência
+                // C. Copiar para a Área de Transferência
                 await navigator.clipboard.writeText(link);
                 
-                // 4. Feedback Visual (Transforma o botão em verde temporariamente)
+                // D. Feedback Visual (Transforma o botão em verde temporariamente)
                 const originalContent = btnFill.innerHTML;
                 btnFill.innerHTML = `<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Link Copiado!`;
                 btnFill.classList.add('bg-green-50');
