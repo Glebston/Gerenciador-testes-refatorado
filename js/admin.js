@@ -568,8 +568,7 @@ async function handleCreateButton() {
     if (!email) return;
     const name = prompt("PASSO 3/4: Nome da Empresa:");
     if (!name) return;
-    const plan = prompt("PASSO 4/4: Plano (essencial/pro):", "essencial");
-    
+const plan = prompt("PASSO 4/4: Digite o ID do plano ('essencial' = Plano PRO | 'pro' = Premium):", "essencial");    
     await createNewCompany(uid.trim(), email.trim(), name.trim(), plan || 'essencial');
 }
 
