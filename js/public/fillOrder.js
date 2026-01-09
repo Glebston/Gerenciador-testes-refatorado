@@ -1,14 +1,12 @@
 // js/public/fillOrder.js
 // ========================================================
-// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v1.0)
+// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v1.1 - Fix Import)
 // Responsabilidade: Permitir que o cliente final adicione
 // a lista de nomes/tamanhos sem precisar de login.
 // ========================================================
 
-// Importações diretas do CDN para garantir funcionamento sem bundlers complexos
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+// 1. Importamos apenas as FUNÇÕES utilitárias do Firestore (não precisamos de getFirestore ou initializeApp aqui)
 import { 
-    getFirestore, 
     doc, 
     getDoc, 
     updateDoc, 
@@ -16,12 +14,9 @@ import {
     serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Importa a configuração (ajustando o caminho relativo)
-import { firebaseConfig } from '../firebaseConfig.js';
-
-// --- INICIALIZAÇÃO FIREBASE (Instância Isolada) ---
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// 2. Importamos a INSTÂNCIA DO BANCO DE DADOS (db) já inicializada
+// Isso corrige o erro de importação e evita inicialização dupla
+import { db } from '../firebaseConfig.js';
 
 // --- ESTADO DA APLICAÇÃO ---
 const state = {
