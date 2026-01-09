@@ -1,8 +1,8 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.30.1 - SaaS Full Integration)
-// Responsabilidade: Gerenciar a renderização de pedidos,
-// travas visuais PRO e Funcionalidade de Menus/Links.
+// MÓDULO ORDER RENDERER (v5.30.2 - Fix Company ID Lookup)
+// Responsabilidade: Renderizar pedidos e Gerar Link com
+// o ID correto da empresa (buscando do Storage).
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
@@ -581,10 +581,15 @@ export const viewOrder = (order) => {
             
             // A. Identificar a empresa (UID)
             const auth = getAuth();
-            const companyId = auth.currentUser ? auth.currentUser.uid : null;
+            
+            // Tenta pegar o ID real da empresa do armazenamento local (definido no login do main.js)
+            // Se não achar, usa o ID do usuário logado (Auth) como fallback
+            const companyId = localStorage.getItem('userCompanyId') || 
+                              localStorage.getItem('companyId') || 
+                              (auth.currentUser ? auth.currentUser.uid : null);
 
             if (!companyId) {
-                alert("Erro de Segurança: Não foi possível identificar a sua empresa. Por favor, recarregue a página.");
+                alert("Erro: Não foi possível identificar o ID da empresa. Tente fazer login novamente.");
                 return;
             }
 
