@@ -1,14 +1,36 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.30.2 - Fix Company ID Lookup)
-// Responsabilidade: Renderizar pedidos e Gerar Link com
-// o ID correto da empresa (buscando do Storage).
+// MÓDULO ORDER RENDERER (v5.31.0 - Stable SaaS Release)
+// Responsabilidade: Renderizar pedidos e gerenciar links PRO.
+// Status: OTIMIZADO (Memory Leak Fix + Single Auth Instance)
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
-import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; 
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// Importação centralizada para garantir consistência de sessão
+import { db, auth } from '../firebaseConfig.js'; 
 
-// Função auxiliar para pegar o plano atual (Padrão: essencial)
+// --- CONTROLE DE ESTADO GLOBAL DO MÓDULO ---
+
+// Listener Global Único: Fecha menus ao clicar fora
+// Definido fora do viewOrder para evitar duplicação de eventos (Memory Leak)
+const closeMenusOnClickOutside = (e) => {
+    // Só age se o clique NÃO for em um botão de menu NEM dentro de um menu aberto
+    if (!e.target.closest('button[id$="Btn"]') && !e.target.closest('div[role="menu"]')) {
+        const allMenus = document.querySelectorAll('[id$="Menu"]');
+        allMenus.forEach(menu => {
+            if (!menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
+        });
+    }
+};
+// Ativa o listener apenas uma vez no carregamento do módulo
+document.addEventListener('click', closeMenusOnClickOutside);
+
+
+// --- FUNÇÕES AUXILIARES ---
+
 const getUserPlan = () => {
     return localStorage.getItem('userPlan') || 'essencial';
 };
@@ -65,7 +87,7 @@ const generateOrderCardHTML = (order, viewType) => {
     const card = document.createElement('div');
     card.className = "bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow flex flex-col space-y-3 transform hover:-translate-y-1";
     card.dataset.id = order.id;
-    card.dataset.deliveryDate = order.deliveryDate || 'Sem Data'; // Para ordenação no Kanban
+    card.dataset.deliveryDate = order.deliveryDate || 'Sem Data';
 
     card.innerHTML = `
         <div class="flex justify-between items-start">
@@ -97,12 +119,11 @@ const generateOrderCardHTML = (order, viewType) => {
     return card;
 };
 
-/**
- * Prepara o container da lista de pedidos (Kanban ou Grid)
- */
+// --- GERENCIAMENTO DE LISTA (KANBAN/GRID) ---
+
 const setupOrderListContainer = (viewType) => {
-    DOM.ordersList.innerHTML = ''; // Limpa
-    DOM.ordersList.className = ''; // Reseta classes
+    DOM.ordersList.innerHTML = '';
+    DOM.ordersList.className = '';
     if (viewType === 'pending') {
         DOM.ordersList.classList.add('kanban-board');
     } else {
@@ -110,16 +131,12 @@ const setupOrderListContainer = (viewType) => {
     }
 };
 
-/**
- * Procura ou cria uma coluna no Kanban
- */
 const findOrCreateKanbanColumn = (dateKey) => {
     let column = DOM.ordersList.querySelector(`.kanban-column[data-date-key="${dateKey}"]`);
     if (column) {
         return column.querySelector('.kanban-column-content');
     }
 
-    // Coluna não existe, vamos criar
     const formattedDate = dateKey === 'Sem Data' ?
         'Sem Data de Entrega' :
         new Date(dateKey + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -135,7 +152,6 @@ const findOrCreateKanbanColumn = (dateKey) => {
         <div class="kanban-column-content space-y-4"></div>
     `;
 
-    // Insere a coluna na ordem correta
     const allColumns = Array.from(DOM.ordersList.querySelectorAll('.kanban-column'));
     let inserted = false;
     if (dateKey !== 'Sem Data') {
@@ -150,16 +166,12 @@ const findOrCreateKanbanColumn = (dateKey) => {
         }
     }
     if (!inserted) {
-        // Se for "Sem Data" ou mais recente que todas, adiciona no final
         DOM.ordersList.appendChild(column);
     }
     
     return column.querySelector('.kanban-column-content');
 };
 
-/**
- * Atualiza o contador de uma coluna Kanban
- */
 const updateKanbanColumnCounter = (columnContent) => {
     const column = columnContent.closest('.kanban-column');
     if (!column) return;
@@ -168,22 +180,19 @@ const updateKanbanColumnCounter = (columnContent) => {
     const count = columnContent.children.length;
     counter.textContent = count;
     
-    // Se a coluna ficar vazia, remove-a
     if (count === 0) {
         column.remove();
     }
 };
 
-/**
- * Adiciona um card de pedido à UI
- */
+// --- CRUD DE CARDS ---
+
 export const addOrderCard = (order, viewType) => {
     const card = generateOrderCardHTML(order, viewType);
     
     if (viewType === 'pending') {
         const dateKey = order.deliveryDate || 'Sem Data';
         const columnContent = findOrCreateKanbanColumn(dateKey);
-        // Insere o card ordenado por nome dentro da coluna
         const cardsInColumn = Array.from(columnContent.querySelectorAll('.bg-white'));
         let inserted = false;
         for (const existingCard of cardsInColumn) {
@@ -198,7 +207,6 @@ export const addOrderCard = (order, viewType) => {
         }
         updateKanbanColumnCounter(columnContent);
     } else {
-        // Na 'delivered' view (grid), insere ordenado por data (mais novo primeiro)
         const allCards = Array.from(DOM.ordersList.querySelectorAll('.bg-white'));
         let inserted = false;
         const orderDate = new Date(order.deliveryDate || 0);
@@ -215,14 +223,10 @@ export const addOrderCard = (order, viewType) => {
         }
     }
     
-    // Remove o "Nenhum pedido" se for o primeiro
     const placeholder = DOM.ordersList.querySelector('.orders-placeholder');
     if (placeholder) placeholder.remove();
 };
 
-/**
- * Atualiza um card de pedido existente na UI
- */
 export const updateOrderCard = (order, viewType) => {
     const existingCard = DOM.ordersList.querySelector(`[data-id="${order.id}"]`);
     if (!existingCard) {
@@ -311,16 +315,14 @@ const sortSizes = (sizesObject) => {
     });
 };
 
+// --- VISUALIZAÇÃO DETALHADA (MODAL) ---
+
 export const viewOrder = (order) => {
     if (!order) return;
     
-    // ============================================
-    // LÓGICA DO PLANO SaaS (TRAVAS V2)
-    // ============================================
-    const currentPlan = getUserPlan(); // 'essencial' ou 'pro'
+    const currentPlan = getUserPlan(); 
     const isPro = currentPlan === 'pro';
 
-    // Se for Pro, classe "roxa", senão "cinza"
     const externalBtnClass = isPro 
         ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md" 
         : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200";
@@ -332,7 +334,6 @@ export const viewOrder = (order) => {
     const lockBadge = !isPro 
         ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PREMIUM</span>` 
         : '';
-    // ============================================
 
     let subTotal = 0;
     let partsHtml = (order.parts || []).map(p => {
@@ -527,10 +528,8 @@ export const viewOrder = (order) => {
     DOM.viewModal.classList.remove('hidden');
 
     // ============================================
-    // 1. LÓGICA DE INTERFACE (ABRIR/FECHAR MENUS)
+    // 1. CONFIGURAÇÃO DOS MENUS (UI)
     // ============================================
-    
-    // Função auxiliar para ativar dropdowns
     const setupDropdown = (btnId, menuId) => {
         const btn = document.getElementById(btnId);
         const menu = document.getElementById(menuId);
@@ -538,32 +537,20 @@ export const viewOrder = (order) => {
         if (btn && menu) {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // Fecha outros menus abertos para não encavalar
+                // Fecha outros menus abertos
                 document.querySelectorAll('[id$="Menu"]').forEach(m => {
                     if (m.id !== menuId) m.classList.add('hidden');
                 });
-                // Alterna o atual
                 menu.classList.toggle('hidden');
             });
         }
     };
 
-    // Ativamos os 3 menus do modal
     setupDropdown('whatsappMenuBtn', 'whatsappMenu');
     setupDropdown('documentsBtn', 'documentsMenu');
     setupDropdown('externalActionsBtn', 'externalMenu');
 
-    // Fechar menus ao clicar fora
-    const closeMenusOnClickOutside = (e) => {
-        if (!e.target.closest('button[id$="Btn"]') && !e.target.closest('div[role="menu"]')) {
-            document.querySelectorAll('[id$="Menu"]').forEach(menu => menu.classList.add('hidden'));
-        }
-    };
-    // Removemos listener anterior para evitar duplicação e adicionamos o novo
-    document.removeEventListener('click', closeMenusOnClickOutside);
-    document.addEventListener('click', closeMenusOnClickOutside);
-
-    // Lógica para fechar o Modal
+    // Botão Fechar Modal
     const btnClose = document.getElementById('closeViewBtn');
     if (btnClose) {
         btnClose.addEventListener('click', () => {
@@ -572,52 +559,60 @@ export const viewOrder = (order) => {
     }
 
     // ============================================
-    // 2. LÓGICA DO PLANO SaaS (GERAÇÃO DO LINK)
+    // 2. GERAÇÃO DE LINK BLINDADO (SaaS)
     // ============================================
     const btnFill = document.getElementById('generateFillLinkBtn');
     if (btnFill) {
         btnFill.addEventListener('click', async (e) => {
             e.preventDefault();
             
-            // A. Identificar a empresa (UID)
-            const auth = getAuth();
-            
-            // Tenta pegar o ID real da empresa do armazenamento local (definido no login do main.js)
-            // Se não achar, usa o ID do usuário logado (Auth) como fallback
-            const companyId = localStorage.getItem('userCompanyId') || 
-                              localStorage.getItem('companyId') || 
-                              (auth.currentUser ? auth.currentUser.uid : null);
-
-            if (!companyId) {
-                alert("Erro: Não foi possível identificar o ID da empresa. Tente fazer login novamente.");
-                return;
-            }
-
-            // B. Montar o Link Mágico (CORRIGIDO PARA GITHUB PAGES)
-            // Em vez de pegar só a origem, pegamos a origem + o caminho da pasta atual
-            // Isso garante que '/Gerenciador-testes-refatorado/' seja incluído
-            const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-            const baseUrl = window.location.origin + path;
-            
-            const link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
+            const originalText = btnFill.innerHTML;
+            btnFill.innerHTML = `⏳ Gerando...`; 
 
             try {
-                // C. Copiar para a Área de Transferência
+                // Usa a instância 'auth' importada do config (Single Source of Truth)
+                const currentUser = auth.currentUser;
+
+                if (!currentUser) {
+                    throw new Error("Usuário não autenticado. Faça login novamente.");
+                }
+
+                // --- BUSCA SEGURA DE IDENTIDADE ---
+                const userMappingRef = doc(db, "user_mappings", currentUser.uid);
+                const userMappingSnap = await getDoc(userMappingRef);
+
+                let companyId = null;
+                if (userMappingSnap.exists()) {
+                    companyId = userMappingSnap.data().companyId;
+                } else {
+                    console.warn("Mapping não encontrado. Tentando UID direto.");
+                    companyId = currentUser.uid;
+                }
+
+                if (!companyId) {
+                    throw new Error("ID da Empresa não encontrado.");
+                }
+
+                // --- CONSTRUÇÃO DO LINK ---
+                const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+                const baseUrl = window.location.origin + path;
+                const link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
+
+                // --- AÇÃO FINAL ---
                 await navigator.clipboard.writeText(link);
                 
-                // D. Feedback Visual (Transforma o botão em verde temporariamente)
-                const originalContent = btnFill.innerHTML;
                 btnFill.innerHTML = `<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Link Copiado!`;
                 btnFill.classList.add('bg-green-50');
                 
                 setTimeout(() => {
-                    btnFill.innerHTML = originalContent;
+                    btnFill.innerHTML = originalText;
                     btnFill.classList.remove('bg-green-50');
                 }, 3000);
 
             } catch (err) {
-                console.error('Falha ao copiar link:', err);
-                prompt('Não foi possível copiar automaticamente. Copie o link abaixo:', link);
+                console.error('Erro na geração do link:', err);
+                alert(`Erro: ${err.message}`);
+                btnFill.innerHTML = originalText;
             }
         });
     }
