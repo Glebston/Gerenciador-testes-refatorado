@@ -1,7 +1,7 @@
 // js/public/fillOrder.js
 // ========================================================
-// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v2.2 - Final)
-// Responsabilidade: Injeção de dados formatados e Resumo
+// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v2.3 - Clean Data)
+// Responsabilidade: Salvar dados JÁ FORMATADOS no Banco.
 // ========================================================
 
 import { 
@@ -12,10 +12,10 @@ import {
 
 import { db } from '../firebaseConfig.js';
 
-// --- 1. DICIONÁRIO DE TRADUÇÃO PRECISO ---
-// Converte os values do HTML para o formato solicitado pelo usuário
+// --- 1. DICIONÁRIO DE TRADUÇÃO ---
+// Usado para converter o código do HTML em texto final AGORA.
 const sizeLabels = {
-    // Baby Look -> "Tamanho (Baby Look)"
+    // Baby Look
     'BL-PP': 'PP (Baby Look)', 
     'BL-P':  'P (Baby Look)', 
     'BL-M':  'M (Baby Look)',
@@ -23,7 +23,7 @@ const sizeLabels = {
     'BL-GG': 'GG (Baby Look)', 
     'BL-XG': 'XG (Baby Look)',
     
-    // Normal -> "Tamanho (Normal)"
+    // Normal / Unissex
     'PP': 'PP (Normal)', 
     'P':  'P (Normal)', 
     'M':  'M (Normal)',
@@ -31,7 +31,7 @@ const sizeLabels = {
     'GG': 'GG (Normal)', 
     'XG': 'XG (Normal)',
     
-    // Infantil -> "Idade (Infantil)"
+    // Infantil
     '2':  '2 anos (Infantil)', 
     '4':  '4 anos (Infantil)', 
     '6':  '6 anos (Infantil)', 
@@ -130,11 +130,6 @@ function renderInterface() {
     if(DOM.deliveryDate) DOM.deliveryDate.innerHTML = `<span class="text-gray-500 text-xs uppercase block">Cor</span> ${state.targetPart.colorMain || 'N/A'}`;
 }
 
-// Helper: Garante que o texto saia exatamente como "M (Normal)"
-function getPrettySize(sizeCode) {
-    return sizeLabels[sizeCode] || sizeCode;
-}
-
 function updateListUI() {
     DOM.itemsList.innerHTML = '';
     DOM.listCountBadge.textContent = state.items.length;
@@ -145,20 +140,21 @@ function updateListUI() {
         : (DOM.listContainer.classList.add('hidden'), DOM.fixedFooter.classList.add('hidden'));
 
     state.items.forEach((item, index) => {
-        const prettySize = getPrettySize(item.size);
+        // Badge Visual: Pega só a primeira parte (ex: "P" de "P (Normal)") para o ícone
+        const shortSize = item.size.split(' ')[0]; 
+
         const card = document.createElement('div');
         card.className = "bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center fade-in mb-2";
         
-        // Formatação visual da lista de preenchimento
         card.innerHTML = `
             <div class="flex items-center gap-3">
                 <div class="bg-indigo-100 text-indigo-700 font-bold w-12 h-10 flex items-center justify-center rounded-lg text-xs p-1 text-center leading-tight">
-                   ${item.size.replace('BL-', 'BL ')}
+                   ${shortSize}
                 </div>
                 <div>
                     <p class="font-bold text-gray-800 uppercase leading-none">${item.name}</p>
                     <p class="text-xs text-gray-500 mt-1">
-                        ${prettySize} ${item.number ? `• Nº ${item.number}` : ''}
+                        ${item.size} ${item.number ? `• Nº ${item.number}` : ''}
                     </p>
                 </div>
             </div>
@@ -177,24 +173,22 @@ window.removeItem = (index) => {
     updateListUI();
 };
 
-// --- 6. RENDERIZAÇÃO DO RESUMO FINAL (Padrão Solicitado) ---
+// --- 6. RENDERIZAÇÃO DO RESUMO FINAL ---
 function renderSuccessSummary(items) {
     DOM.summaryListContent.innerHTML = '';
     
     if(!items || items.length === 0) return;
 
     items.forEach(item => {
-        const prettySize = getPrettySize(item.size); // Ex: "M (Baby Look)"
-        
         const div = document.createElement('div');
         div.className = "flex justify-between items-center text-sm p-3 bg-white rounded border border-gray-200 shadow-sm";
         
-        // Formatação visual: Francisca - M (Baby Look) - 4
+        // Padrão solicitado: Francisca - M (Baby Look) - 4
         div.innerHTML = `
             <div class="flex-1">
                 <span class="font-bold text-gray-800 uppercase">${item.name}</span>
                 <span class="text-gray-500 mx-1">-</span>
-                <span class="font-semibold text-indigo-700">${prettySize}</span>
+                <span class="font-semibold text-indigo-700">${item.size}</span>
                 ${item.number ? `<span class="text-gray-500 mx-1">-</span> <span class="text-gray-800 font-mono">${item.number}</span>` : ''}
             </div>
         `;
@@ -206,12 +200,19 @@ function renderSuccessSummary(items) {
 DOM.addItemBtn.addEventListener('click', () => {
     const name = DOM.itemName.value.trim();
     const number = DOM.itemNumber.value.trim();
-    const size = DOM.itemSize.value;
+    const rawSize = DOM.itemSize.value; // Ex: BL-P
 
     if (!name) { alert("Digite o nome."); DOM.itemName.focus(); return; }
-    if (!size) { alert("Escolha um tamanho."); DOM.itemSize.focus(); return; }
+    if (!rawSize) { alert("Escolha um tamanho."); DOM.itemSize.focus(); return; }
 
-    state.items.push({ name: name.toUpperCase(), number: number || "", size: size });
+    // TRADUÇÃO IMEDIATA: Salvamos "P (Baby Look)" e não "BL-P"
+    const prettySize = sizeLabels[rawSize] || rawSize;
+
+    state.items.push({ 
+        name: name.toUpperCase(), 
+        number: number || "", 
+        size: prettySize // <--- O segredo está aqui
+    });
 
     DOM.itemName.value = '';
     DOM.itemNumber.value = '';
@@ -238,11 +239,12 @@ DOM.saveListBtn.addEventListener('click', async () => {
         if(!updatedParts[state.partIndex]) throw new Error("Peça não encontrada.");
 
         if (!updatedParts[state.partIndex].details) updatedParts[state.partIndex].details = [];
+        
+        // Injeta os dados JÁ FORMATADOS no banco
         updatedParts[state.partIndex].details.push(...state.items);
 
         await updateDoc(orderRef, { parts: updatedParts });
 
-        // Salva e renderiza o resumo
         state.lastSentItems = [...state.items]; 
         state.items = []; 
         renderSuccessSummary(state.lastSentItems);
@@ -258,22 +260,19 @@ DOM.saveListBtn.addEventListener('click', async () => {
     }
 });
 
-// Botão Copiar para WhatsApp
+// Botão Copiar para WhatsApp (Padrão exato)
 if(DOM.copySummaryBtn) {
     DOM.copySummaryBtn.addEventListener('click', async () => {
         if(!state.lastSentItems.length) return;
 
-        // Cabeçalho
         let textToCopy = `*LISTA ENVIADA - ${state.targetPart.type.toUpperCase()}*\n`;
         textToCopy += `Pedido: ${state.orderData.clientName}\n`;
         textToCopy += `----------------------------------\n`;
 
-        // Itens no padrão: Francisca - M (Baby Look) - 4
+        // Padrão: Francisca - M (Baby Look) - 4
         state.lastSentItems.forEach(item => {
-            const prettySize = getPrettySize(item.size); // Ex: M (Baby Look)
             const numberPart = item.number ? ` - ${item.number}` : '';
-            
-            textToCopy += `${item.name} - ${prettySize}${numberPart}\n`;
+            textToCopy += `${item.name} - ${item.size}${numberPart}\n`;
         });
         
         textToCopy += `----------------------------------\n`;
@@ -299,7 +298,7 @@ if(DOM.copySummaryBtn) {
     });
 }
 
-// Helpers Visuais
+// Helpers
 function showError(msg) {
     if(DOM.feedback) {
         DOM.feedback.innerHTML = `<div class="bg-red-50 text-red-600 p-6 rounded-xl border border-red-200 shadow-sm text-center"><p class="font-bold text-lg text-gray-800">Atenção</p><p class="text-sm mt-1">${msg}</p></div>`;
@@ -317,5 +316,4 @@ function updateStatus(text, color) {
     }
 }
 
-// Init
 init();
