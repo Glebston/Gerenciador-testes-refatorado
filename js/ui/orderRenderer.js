@@ -1,8 +1,8 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.31.0 - Stable SaaS Release)
+// MÓDULO ORDER RENDERER (v5.32.0 - SaaS Deep Link Update)
 // Responsabilidade: Renderizar pedidos e gerenciar links PRO.
-// Status: OTIMIZADO (Memory Leak Fix + Single Auth Instance)
+// Status: ATUALIZADO (Suporte a Link por Peça)
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
@@ -13,9 +13,7 @@ import { db, auth } from '../firebaseConfig.js';
 // --- CONTROLE DE ESTADO GLOBAL DO MÓDULO ---
 
 // Listener Global Único: Fecha menus ao clicar fora
-// Definido fora do viewOrder para evitar duplicação de eventos (Memory Leak)
 const closeMenusOnClickOutside = (e) => {
-    // Só age se o clique NÃO for em um botão de menu NEM dentro de um menu aberto
     if (!e.target.closest('button[id$="Btn"]') && !e.target.closest('div[role="menu"]')) {
         const allMenus = document.querySelectorAll('[id$="Menu"]');
         allMenus.forEach(menu => {
@@ -25,7 +23,6 @@ const closeMenusOnClickOutside = (e) => {
         });
     }
 };
-// Ativa o listener apenas uma vez no carregamento do módulo
 document.addEventListener('click', closeMenusOnClickOutside);
 
 
@@ -83,7 +80,6 @@ const generateOrderCardHTML = (order, viewType) => {
            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M5 3a2 2 0 00-2 2v6a1 1 0 102 0V5h6a1 1 0 100-2H5z" /></svg>
         </button>`;
     
-    // Criamos o elemento DOM em vez de string
     const card = document.createElement('div');
     card.className = "bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow flex flex-col space-y-3 transform hover:-translate-y-1";
     card.dataset.id = order.id;
@@ -321,7 +317,7 @@ export const viewOrder = (order) => {
     if (!order) return;
     
     const currentPlan = getUserPlan(); 
-    const isPro = currentPlan === 'pro';
+    const isPro = currentPlan === 'pro'; // Verificação técnica segura
 
     const externalBtnClass = isPro 
         ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md" 
@@ -336,7 +332,9 @@ export const viewOrder = (order) => {
         : '';
 
     let subTotal = 0;
-    let partsHtml = (order.parts || []).map(p => {
+    
+    // ATUALIZAÇÃO: Map agora inclui index para Deep Linking
+    let partsHtml = (order.parts || []).map((p, index) => {
         const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
         const specificQty = (p.specifics || []).length;
         const detailedQty = (p.details || []).length;
@@ -381,9 +379,30 @@ export const viewOrder = (order) => {
             unitPriceHtml = `R$ ${(p.unitPrice || 0).toFixed(2)}`;
         }
 
+        // --- LÓGICA DO BOTÃO DE LINK ESPECÍFICO (DEEP LINK) ---
+        let partLinkBtn = '';
+        if (isPro && p.partInputType === 'detalhado') {
+            partLinkBtn = `
+            <button 
+                data-part-index="${index}" 
+                class="generate-part-link-btn ml-2 text-indigo-600 hover:text-indigo-800 transition-colors p-1 rounded hover:bg-indigo-50" 
+                title="Copiar Link de Preenchimento para ${p.type}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+            </button>`;
+        }
+        // -----------------------------------------------------
+
         return `
             <tr>
-                <td class="py-1 px-2 border">${p.type}${itemsDetailHtml}</td>
+                <td class="py-1 px-2 border">
+                    <div class="flex items-center justify-between">
+                        <span>${p.type}</span>
+                        ${partLinkBtn}
+                    </div>
+                    ${itemsDetailHtml}
+                </td>
                 <td class="py-1 px-2 border">${p.material}</td>
                 <td class="py-1 px-2 border">${p.colorMain}</td>
                 <td class="py-1 px-2 border text-center">${standardQty + specificQty + detailedQty}</td>
@@ -514,7 +533,7 @@ export const viewOrder = (order) => {
                         <div class="py-1" role="menu">
                             <button id="generateFillLinkBtn" data-id="${order.id}" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
                                 <svg class="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                                Link de Preenchimento
+                                Link de Preenchimento (Pedido Completo)
                             </button>
                         </div>
                     </div>
@@ -559,61 +578,77 @@ export const viewOrder = (order) => {
     }
 
     // ============================================
-    // 2. GERAÇÃO DE LINK BLINDADO (SaaS)
+    // LÓGICA DE GERAÇÃO DE LINK (Reutilizável)
     // ============================================
+    const handleGenerateLink = async (targetBtn, partIndex = null) => {
+        const originalContent = targetBtn.innerHTML;
+        // Feedback visual simples
+        targetBtn.innerHTML = partIndex !== null ? '⏳' : '⏳ Gerando...'; 
+
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) throw new Error("Usuário não autenticado.");
+
+            const userMappingRef = doc(db, "user_mappings", currentUser.uid);
+            const userMappingSnap = await getDoc(userMappingRef);
+
+            let companyId = null;
+            if (userMappingSnap.exists()) {
+                companyId = userMappingSnap.data().companyId;
+            } else {
+                companyId = currentUser.uid;
+            }
+
+            if (!companyId) throw new Error("ID da Empresa não encontrado.");
+
+            const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const baseUrl = window.location.origin + path;
+            
+            // --- DEEP LINK LOGIC ---
+            let link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
+            if (partIndex !== null) {
+                link += `&partIndex=${partIndex}`;
+            }
+
+            await navigator.clipboard.writeText(link);
+            
+            // Feedback de Sucesso
+            if (partIndex !== null) {
+                // Para o botão pequeno (ícone)
+                targetBtn.innerHTML = `<svg class="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+            } else {
+                // Para o botão grande (menu)
+                targetBtn.innerHTML = `<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Link Copiado!`;
+                targetBtn.classList.add('bg-green-50');
+            }
+            
+            setTimeout(() => {
+                targetBtn.innerHTML = originalContent;
+                if (partIndex === null) targetBtn.classList.remove('bg-green-50');
+            }, 3000);
+
+        } catch (err) {
+            console.error('Erro na geração do link:', err);
+            alert(`Erro: ${err.message}`);
+            targetBtn.innerHTML = originalContent;
+        }
+    };
+
+    // 2. Listener para o botão Geral (Rodapé)
     const btnFill = document.getElementById('generateFillLinkBtn');
     if (btnFill) {
-        btnFill.addEventListener('click', async (e) => {
+        btnFill.addEventListener('click', (e) => {
             e.preventDefault();
-            
-            const originalText = btnFill.innerHTML;
-            btnFill.innerHTML = `⏳ Gerando...`; 
-
-            try {
-                // Usa a instância 'auth' importada do config (Single Source of Truth)
-                const currentUser = auth.currentUser;
-
-                if (!currentUser) {
-                    throw new Error("Usuário não autenticado. Faça login novamente.");
-                }
-
-                // --- BUSCA SEGURA DE IDENTIDADE ---
-                const userMappingRef = doc(db, "user_mappings", currentUser.uid);
-                const userMappingSnap = await getDoc(userMappingRef);
-
-                let companyId = null;
-                if (userMappingSnap.exists()) {
-                    companyId = userMappingSnap.data().companyId;
-                } else {
-                    console.warn("Mapping não encontrado. Tentando UID direto.");
-                    companyId = currentUser.uid;
-                }
-
-                if (!companyId) {
-                    throw new Error("ID da Empresa não encontrado.");
-                }
-
-                // --- CONSTRUÇÃO DO LINK ---
-                const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-                const baseUrl = window.location.origin + path;
-                const link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
-
-                // --- AÇÃO FINAL ---
-                await navigator.clipboard.writeText(link);
-                
-                btnFill.innerHTML = `<svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Link Copiado!`;
-                btnFill.classList.add('bg-green-50');
-                
-                setTimeout(() => {
-                    btnFill.innerHTML = originalText;
-                    btnFill.classList.remove('bg-green-50');
-                }, 3000);
-
-            } catch (err) {
-                console.error('Erro na geração do link:', err);
-                alert(`Erro: ${err.message}`);
-                btnFill.innerHTML = originalText;
-            }
+            handleGenerateLink(btnFill, null);
         });
     }
+
+    // 3. Listeners para os botões Específicos (Por Peça - Deep Link)
+    document.querySelectorAll('.generate-part-link-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evita que o clique afete a linha da tabela se houver listener lá
+            const index = btn.dataset.partIndex;
+            handleGenerateLink(btn, index);
+        });
+    });
 };
