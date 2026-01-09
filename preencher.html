@@ -10,6 +10,10 @@
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Scrollbar fina para a lista de resumo no celular */
+        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #f1f1f1; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
     </style>
 </head>
 <body class="text-gray-800 pb-24">
@@ -32,10 +36,8 @@
         
         <div id="orderInfo" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <div class="grid grid-cols-2 gap-4">
-                <div id="clientName" class="text-sm font-semibold text-gray-700">
-                    </div>
-                <div id="deliveryDate" class="text-sm font-semibold text-gray-700 text-right">
-                     </div>
+                <div id="clientName" class="text-sm font-semibold text-gray-700"></div>
+                <div id="deliveryDate" class="text-sm font-semibold text-gray-700 text-right"></div>
             </div>
         </div>
 
@@ -126,18 +128,35 @@
         </div>
     </div>
 
-    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden fade-in">
-        <div class="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 hidden fade-in backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
+            
+            <div class="p-5 text-center border-b border-gray-100">
+                <div class="w-14 h-14 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-800">Sucesso!</h2>
+                <p class="text-sm text-gray-500 mt-1">Confira abaixo o que foi enviado para a fábrica:</p>
             </div>
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Sucesso!</h2>
-            <p class="text-gray-600 mb-6">Os itens foram adicionados ao pedido na fábrica com sucesso.</p>
-            <button onclick="window.location.reload()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 rounded-xl transition-colors">
-                Adicionar Mais
-            </button>
+
+            <div class="p-4 bg-gray-50 overflow-y-auto flex-1 scrollbar-thin border-b border-gray-100">
+                <div id="summaryListContent" class="space-y-2">
+                    </div>
+            </div>
+
+            <div class="p-4 space-y-3 bg-white rounded-b-2xl">
+                <button id="copySummaryBtn" class="w-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 border border-indigo-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Copiar Resumo
+                </button>
+                <button onclick="window.location.reload()" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 rounded-xl transition-colors shadow-md">
+                    Novo Envio
+                </button>
+            </div>
         </div>
     </div>
 
