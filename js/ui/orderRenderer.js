@@ -588,8 +588,12 @@ export const viewOrder = (order) => {
                 return;
             }
 
-            // B. Montar o Link Mágico (Funciona em Localhost e Produção)
-            const baseUrl = window.location.origin; 
+            // B. Montar o Link Mágico (CORRIGIDO PARA GITHUB PAGES)
+            // Em vez de pegar só a origem, pegamos a origem + o caminho da pasta atual
+            // Isso garante que '/Gerenciador-testes-refatorado/' seja incluído
+            const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const baseUrl = window.location.origin + path;
+            
             const link = `${baseUrl}/preencher.html?cid=${companyId}&oid=${order.id}`;
 
             try {
