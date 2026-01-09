@@ -10,7 +10,6 @@
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Scrollbar fina para a lista de resumo no celular */
         .scrollbar-thin::-webkit-scrollbar { width: 4px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: #f1f1f1; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
@@ -106,8 +105,7 @@
                 <h3 class="font-bold text-gray-600 text-sm uppercase">Itens nesta sessão</h3>
                 <span id="listCountBadge" class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
             </div>
-            <div id="itemsList" class="space-y-2 pb-20">
-                </div>
+            <div id="itemsList" class="space-y-2 pb-20"></div>
         </div>
     </main>
 
@@ -136,8 +134,7 @@
             </div>
 
             <div class="p-4 bg-gray-50 overflow-y-auto flex-1 scrollbar-thin border-b border-gray-100">
-                <div id="summaryListContent" class="space-y-2">
-                    </div>
+                <div id="summaryListContent" class="space-y-2"></div>
             </div>
 
             <div class="p-4 space-y-3 bg-white rounded-b-2xl">
