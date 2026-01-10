@@ -19,10 +19,15 @@
 
     <header class="bg-indigo-600 text-white p-4 shadow-lg sticky top-0 z-10">
         <div class="max-w-md mx-auto flex justify-between items-center">
-            <div>
-                <h1 class="font-bold text-lg leading-tight">Carregando...</h1>
-                <p class="text-indigo-200 text-xs">PagLucro Gestor</p>
+            <div class="flex items-center gap-3">
+                <img id="companyLogo" class="h-10 w-auto object-contain bg-white rounded p-0.5 hidden" alt="Logo da Empresa">
+                
+                <div id="defaultHeader">
+                    <h1 class="font-bold text-lg leading-tight">Carregando...</h1>
+                    <p class="text-indigo-200 text-xs">PagLucro Gestor</p>
+                </div>
             </div>
+            
             <div id="statusBadge" class="text-xs px-2 py-1 rounded-full bg-indigo-500 text-indigo-100 border border-indigo-400 font-medium">
                 Conectando...
             </div>
@@ -38,6 +43,7 @@
                 <div id="clientName" class="text-sm font-semibold text-gray-700"></div>
                 <div id="deliveryDate" class="text-sm font-semibold text-gray-700 text-right"></div>
             </div>
+            <div id="companyPhone" class="text-xs text-center text-indigo-600 font-semibold mt-3 pt-2 border-t border-gray-100 hidden"></div>
         </div>
 
         <div class="bg-white p-5 rounded-xl shadow-md border-t-4 border-indigo-500">
@@ -51,7 +57,7 @@
             <div class="space-y-3">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nome na Estampa</label>
-                    <input type="text" id="itemName" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-lg font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 uppercase placeholder-gray-300" placeholder="Ex: JOÃO">
+                    <input type="text" id="itemName" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-lg font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-300" placeholder="Ex: João Silva">
                 </div>
 
                 <div class="grid grid-cols-3 gap-3">
