@@ -448,7 +448,7 @@ const _createProductionPdfDocument = async (order, userCompanyName) => {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Tel: ${order.clientPhone || 'N/A'}`, MARGIN + 2, yPosition + 14);
-    doc.text(`Data do Pedido: ${order.orderDate ? new Date(order.orderDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}`], MARGIN + 2, yPosition + 21);
+    doc.text(`Data do Pedido: ${order.orderDate ? new Date(order.orderDate + 'T00:00:00').toLocaleDateString('pt-br') : 'N/A'}`, MARGIN + 2, yPosition + 21);
 
     // Destaque da Entrega (Lado Direito)
     doc.setFontSize(10);
@@ -886,3 +886,4 @@ export const runDatabaseMigration = async (showInfoModal) => {
         showInfoModal("Erro ao rodar migração. Veja o console (F12).");
     }
 };
+
