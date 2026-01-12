@@ -1,7 +1,7 @@
 // js/public/fillOrder.js
-// =========================================================
-// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v3.1 - End Flow)
-// Responsabilidade: Salvar dados, Branding e Fluxo de Encerramento.
+// ========================================================
+// MÓDULO PÚBLICO: PREENCHIMENTO DE PEDIDOS (v3.2 - Fix Tela Final)
+// Responsabilidade: Salvar dados, Branding e Tela de Agradecimento (Overlay).
 // ========================================================
 
 import { 
@@ -47,7 +47,7 @@ const state = {
     targetPart: null,
     items: [],
     lastSentItems: [],
-    companyWhatsapp: null // [NOVO] Armazena o contato para o encerramento
+    companyWhatsapp: null 
 };
 
 // --- 3. DOM ---
@@ -137,30 +137,23 @@ async function init() {
 function applyBranding(config) {
     if (!config) return;
 
-    // Logo
     if (config.logoUrl && DOM.companyLogo && DOM.defaultHeader) {
         DOM.companyLogo.src = config.logoUrl;
         DOM.companyLogo.classList.remove('hidden');
         DOM.defaultHeader.classList.add('hidden');
     }
 
-    // Telefone / WhatsApp Inteligente
     if (config.whatsapp) {
         let phone = config.whatsapp.replace(/\D/g, ''); 
-        
-        // Remove 55 extra se existir (para exibição bonita)
         if (phone.startsWith('55') && phone.length > 11) {
             phone = phone.substring(2);
         }
-
-        // Armazena no estado global (com ou sem 55, normalizamos no link final)
         state.companyWhatsapp = phone; 
 
         if (DOM.companyPhone) {
             const displayPhone = phone.length > 2
                 ? `(${phone.slice(0,2)}) ${phone.slice(2,7)}-${phone.slice(7)}`
                 : phone;
-            
             DOM.companyPhone.textContent = `Dúvidas? Fale conosco: ${displayPhone}`;
             DOM.companyPhone.classList.remove('hidden');
         }
@@ -219,7 +212,6 @@ window.removeItem = (index) => {
     updateListUI();
 };
 
-// --- 6. RENDERIZAÇÃO DO RESUMO FINAL ---
 function renderSuccessSummary(items) {
     DOM.summaryListContent.innerHTML = '';
     if(!items || items.length === 0) return;
@@ -241,57 +233,40 @@ function renderSuccessSummary(items) {
 
 // --- 7. AÇÕES E FLUXO DE ENCERRAMENTO ---
 
-// [NOVO] Injeta o botão "Finalizar" no modal de sucesso dinamicamente
 function injectFinishButton() {
-    // Evita duplicidade
     if (document.getElementById('finishInteractionBtn')) return;
 
-    // Procura o container onde estão os botões (pai do botão Copiar)
     const btnContainer = DOM.copySummaryBtn.parentNode;
     if (!btnContainer) return;
 
-    // Cria o botão com estilo "Fantasma" (Ghost/Outline) para não brigar com o principal
     const finishBtn = document.createElement('button');
     finishBtn.id = 'finishInteractionBtn';
     finishBtn.className = "w-full py-3 mt-3 rounded-xl border border-gray-200 text-gray-500 font-medium hover:bg-gray-50 hover:text-gray-700 transition-colors text-sm flex items-center justify-center gap-2";
-    finishBtn.innerHTML = `
-        <span>Encerrar Atendimento</span>
-    `;
+    finishBtn.innerHTML = `<span>Encerrar Atendimento</span>`;
     
     finishBtn.onclick = showThankYouScreen;
-    
-    // Adiciona ao final da lista de botões
     btnContainer.appendChild(finishBtn);
 }
 
-// [NOVO] Tela de Agradecimento e Suporte
+// [CORREÇÃO] Overlay de Tela Cheia (Garante que apareça por cima de tudo)
 function showThankYouScreen() {
-    // Esconde toda a interface de operação
+    // Esconde o modal de botões para não ficar duplicado
     DOM.successModal.classList.add('hidden');
-    DOM.inputForm.classList.add('hidden');
-    DOM.orderInfo.classList.add('hidden');
-    DOM.fixedFooter.classList.add('hidden');
-    document.body.classList.add('bg-gray-50'); // Garante fundo limpo
 
-    // Cria o card de agradecimento
-    const mainContainer = document.querySelector('main') || document.body;
-    mainContainer.innerHTML = ''; // Limpa tudo
+    // Cria um container fixo que cobre 100% da tela (z-index alto)
+    const overlay = document.createElement('div');
+    overlay.className = "fixed inset-0 bg-gray-50 z-[100] flex flex-col items-center justify-center p-4 animate-fade-in";
     
-    const card = document.createElement('div');
-    card.className = "min-h-[80vh] flex flex-col items-center justify-center p-6 text-center animate-fade-in";
-    
-    // Prepara link do WhatsApp
     let whatsappLink = '#';
     let hasContact = false;
     if (state.companyWhatsapp) {
         hasContact = true;
-        // Garante formato internacional para o link
         const rawPhone = state.companyWhatsapp.startsWith('55') ? state.companyWhatsapp : `55${state.companyWhatsapp}`;
         whatsappLink = `https://wa.me/${rawPhone}`;
     }
 
-    card.innerHTML = `
-        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full border border-gray-100">
+    overlay.innerHTML = `
+        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full border border-gray-100 text-center">
             <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -318,10 +293,11 @@ function showThankYouScreen() {
         </div>
     `;
     
-    mainContainer.appendChild(card);
+    // Adiciona direto ao corpo do documento para garantir que fique por cima
+    document.body.appendChild(overlay);
 }
 
-// --- 8. LISTENERS PRINCIPAIS ---
+// --- 8. LISTENERS ---
 
 DOM.addItemBtn.addEventListener('click', () => {
     const name = DOM.itemName.value.trim();
@@ -379,9 +355,8 @@ DOM.saveListBtn.addEventListener('click', async () => {
         
         renderSuccessSummary(state.lastSentItems);
         
-        // [MODIFICAÇÃO] Mostra Modal e Injeta o Botão Finalizar
         DOM.successModal.classList.remove('hidden');
-        injectFinishButton(); // <--- Injeção aqui
+        injectFinishButton(); 
         
         updateListUI(); 
 
