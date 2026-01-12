@@ -1,8 +1,8 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.32.0 - SaaS Deep Link Update)
+// MÓDULO ORDER RENDERER (v5.33.0 - UX Fix Aguardando Retirada)
 // Responsabilidade: Renderizar pedidos e gerenciar links PRO.
-// Status: ATUALIZADO (Suporte a Link por Peça)
+// Status: ATUALIZADO (Correção Visual de Atraso)
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
@@ -32,8 +32,15 @@ const getUserPlan = () => {
     return localStorage.getItem('userPlan') || 'essencial';
 };
 
-const getDeliveryCountdown = (deliveryDate) => {
+// [ATUALIZADO] Agora aceita 'status' para verificar se está finalizado
+const getDeliveryCountdown = (deliveryDate, status) => {
+    // 1. Prioridade Alta: Se já está pronto, avisa que falta retirar (ignora data)
+    if (status === 'Finalizado') {
+        return { text: '📦 Aguardando retirada', color: 'orange' };
+    }
+
     if (!deliveryDate) return { text: 'Sem data', color: 'gray' };
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const delivery = new Date(deliveryDate + 'T00:00:00');
@@ -60,12 +67,15 @@ const generateOrderCardHTML = (order, viewType) => {
     });
     totalValue -= (order.discount || 0);
 
-    const countdown = getDeliveryCountdown(order.deliveryDate);
+    // [ATUALIZADO] Passamos o status para a lógica de countdown
+    const countdown = getDeliveryCountdown(order.deliveryDate, order.orderStatus);
+    
     const countdownColorClasses = {
         red: 'bg-red-100 text-red-800',
         yellow: 'bg-yellow-100 text-yellow-800',
         green: 'bg-green-100 text-green-800',
-        gray: 'bg-gray-100 text-gray-800'
+        gray: 'bg-gray-100 text-gray-800',
+        orange: 'bg-orange-100 text-orange-800' // [NOVO] Estilo para 'Aguardando retirada'
     };
 
     const formattedDeliveryDate = order.deliveryDate ?
