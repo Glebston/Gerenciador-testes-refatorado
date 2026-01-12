@@ -151,10 +151,18 @@ function applyBranding(config) {
 
     // Telefone / WhatsApp
     if (config.whatsapp && DOM.companyPhone) {
-        // Formata o telefone visualmente (assumindo 5588999999999)
-        const phone = config.whatsapp.replace(/\D/g, '');
-        const displayPhone = phone.length > 10 
-            ? `(${phone.slice(2,4)}) ${phone.slice(4,9)}-${phone.slice(9)}`
+        // 1. Limpa tudo que não é número
+        let phone = config.whatsapp.replace(/\D/g, ''); 
+
+        // 2. A "Inteligência": Se o usuário colocou 55, a gente remove para padronizar.
+        // Assim, funciona tanto para quem digitou "558399..." quanto para "8399..."
+        if (phone.startsWith('55') && phone.length > 11) {
+            phone = phone.substring(2);
+        }
+
+        // 3. Formata bonito: (XX) XXXXX-XXXX
+        const displayPhone = phone.length > 2
+            ? `(${phone.slice(0,2)}) ${phone.slice(2,7)}-${phone.slice(7)}`
             : phone;
         
         DOM.companyPhone.textContent = `Dúvidas? Fale conosco: ${displayPhone}`;
