@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// ORQUESTRADOR CENTRAL (v5.9.0 - SaaS Plan Auto-Detection)
+// ORQUESTRADOR CENTRAL (v6.1.0 - Branding Integration)
 // ========================================================
 
 async function main() {
@@ -70,6 +70,9 @@ async function main() {
         const { initializeFinanceListeners } = await import(`./listeners/financeListeners.js${cacheBuster}`);
         const { initializeModalAndPricingListeners } = await import(`./listeners/modalAndPricingListeners.js${cacheBuster}`);
         const { initConfigListeners } = await import(`./listeners/configListeners.js${cacheBuster}`);
+        
+        // [NOVO] Importação da Lógica de Configurações (Logo e Upload)
+        const { openSettingsModal } = await import(`./listeners/settingsLogic.js${cacheBuster}`);
 
         // ========================================================
         // 2. ESTADO GLOBAL
@@ -130,66 +133,51 @@ async function main() {
                     const companyData = companySnap.data();
                     
                     // ============================================================
-                    // 🛡️ SEGURANÇA AVANÇADA SAAS (Bloqueio & Vencimento)
+                    // 🛡️ SEGURANÇA AVANÇADA SAAS
                     // ============================================================
 
-                    // 1. Exclusão Lógica ou Bloqueio Manual
                     if (companyData.isDeleted === true || companyData.isBlocked === true) {
                         if (!isAdminUser) {
                             console.warn("🚫 Acesso negado: Conta bloqueada ou excluída.");
                             document.getElementById('blockedModal').classList.remove('hidden');
                             document.getElementById('blockedLogoutBtn').onclick = handleLogout;
-                            return; // Encerra execução (não carrega dados)
+                            return; 
                         }
                     }
 
-                    // 2. Verificação de Assinatura (Grace Period)
                     if (!isAdminUser && !companyData.isLifetime && companyData.dueDate) {
                         const today = new Date();
                         today.setHours(0,0,0,0);
-                        
                         const [y, m, d] = companyData.dueDate.split('-').map(Number);
                         const dueDate = new Date(y, m - 1, d);
-                        
-                        // Calcula dias de atraso
                         const diffTime = today - dueDate;
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                         if (diffDays > 5) {
-                            // CASO CRÍTICO: Vencido há mais de 5 dias -> BLOQUEIO
                             console.warn(`🚫 Plano vencido há ${diffDays} dias.`);
                             document.getElementById('blockedModal').classList.remove('hidden');
                             document.getElementById('blockedLogoutBtn').onclick = handleLogout;
-                            return; // Encerra execução
+                            return; 
                         } 
                         else if (diffDays > 0) {
-                            // CASO ALERTA: Vencido entre 1 e 5 dias -> AVISO (Permite uso)
                             console.warn(`⚠️ Tolerância: Vencido há ${diffDays} dias.`);
                             document.getElementById('paymentWarningModal').classList.remove('hidden');
                         }
                     }
 
-                    // 3. O Espião (Último Acesso) & Correção de Email
                     updateDoc(companyRef, { 
                         lastAccess: serverTimestamp(),
                         email: user.email 
                     }).catch(e => console.warn("Erro ao rastrear acesso:", e));
 
-                    // 4. Mensageria Inteligente (Lê e apaga)
                     if (companyData.adminMessage && companyData.adminMessage.trim() !== "") {
                         UI.showInfoModal(`🔔 MENSAGEM DO SUPORTE:\n\n${companyData.adminMessage}`);
-                        
-                        // Limpa a mensagem no banco para não repetir
-                        updateDoc(companyRef, { adminMessage: "" })
-                            .catch(e => console.error("Erro ao limpar mensagem lida:", e));
+                        updateDoc(companyRef, { adminMessage: "" }).catch(e => console.error("Erro ao limpar mensagem:", e));
                     }
 
-                    // 5. [NOVO] DETECÇÃO AUTOMÁTICA DO PLANO SaaS
-                    // ------------------------------------------------------------
                     const userPlan = companyData.subscription?.planId || 'essencial';
                     localStorage.setItem('userPlan', userPlan);
                     console.log(`💎 [SaaS] Plano Detectado: ${userPlan.toUpperCase()}`);
-                    // ------------------------------------------------------------
 
                     // ============================================================
                     // FIM DA LÓGICA DE SEGURANÇA
@@ -200,11 +188,9 @@ async function main() {
                 } else {
                     userCompanyName = user.email; 
                     userBankBalanceConfig = { initialBalance: 0 };
-                    // Fallback para empresas fantasmas
                     localStorage.setItem('userPlan', 'essencial');
                 }
                 
-                // Configuração da UI após passar pela segurança
                 UI.DOM.userEmail.textContent = userCompanyName;
                 if (UI.DOM.periodFilter) UI.DOM.periodFilter.value = 'thisMonth';
 
@@ -225,6 +211,25 @@ async function main() {
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
+                // [NOVO] Conexão Vital: Botão de Configurações -> Nova Lógica (Logo/Upload)
+                // ------------------------------------------------------------
+                const openSettingsBtn = document.getElementById('openSettingsBtn');
+                if (openSettingsBtn) {
+                    // Remove listeners antigos (clonando o nó) para evitar conflitos, se necessário
+                    // Mas aqui vamos apenas adicionar o listener novo que sobrepõe a lógica visual
+                    openSettingsBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const modal = document.getElementById('settingsModal');
+                        if (modal) {
+                            modal.classList.remove('hidden');
+                            // Injeta o ID da empresa para o settingsLogic saber onde salvar
+                            modal.dataset.companyId = userCompanyId;
+                            openSettingsModal(); // Carrega Logo e Dados
+                        }
+                    });
+                }
+                // ------------------------------------------------------------
+
                 // Exibição do App e Carregamento do Admin
                 setTimeout(async () => {
                     UI.DOM.authContainer.classList.add('hidden'); 
@@ -263,11 +268,9 @@ async function main() {
             UI.DOM.app.classList.add('hidden');
             UI.DOM.authContainer.classList.remove('hidden');
             
-            // Garante que os modais de bloqueio sumam ao deslogar
             document.getElementById('blockedModal').classList.add('hidden');
             document.getElementById('paymentWarningModal').classList.add('hidden');
             
-            // Limpa o cache do plano ao sair
             localStorage.removeItem('userPlan');
 
             cleanupOrderService();
@@ -280,7 +283,6 @@ async function main() {
             isAdminUser = false;
         };
 
-        // Ouvinte de Autenticação
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 initializeAppLogic(user);
