@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// ORQUESTRADOR CENTRAL (v6.1.0 - Branding Integration)
+// ORQUESTRADOR CENTRAL (v6.1.1 - Fix Button ID)
 // ========================================================
 
 async function main() {
@@ -71,7 +71,7 @@ async function main() {
         const { initializeModalAndPricingListeners } = await import(`./listeners/modalAndPricingListeners.js${cacheBuster}`);
         const { initConfigListeners } = await import(`./listeners/configListeners.js${cacheBuster}`);
         
-        // [NOVO] Importação da Lógica de Configurações (Logo e Upload)
+        // [NOVO] Importação da Lógica de Configurações
         const { openSettingsModal } = await import(`./listeners/settingsLogic.js${cacheBuster}`);
 
         // ========================================================
@@ -211,22 +211,22 @@ async function main() {
                 initializeAndPopulateDatalists(); 
                 UI.updateNavButton(currentDashboardView);
                 
-                // [NOVO] Conexão Vital: Botão de Configurações -> Nova Lógica (Logo/Upload)
+                // [CORREÇÃO] Conexão Vital: Botão de Configurações (Nome correto do botão)
                 // ------------------------------------------------------------
-                const openSettingsBtn = document.getElementById('openSettingsBtn');
+                // Alterado de 'openSettingsBtn' para 'companySettingsBtn' (nome usado no HTML)
+                const openSettingsBtn = document.getElementById('companySettingsBtn'); 
                 if (openSettingsBtn) {
-                    // Remove listeners antigos (clonando o nó) para evitar conflitos, se necessário
-                    // Mas aqui vamos apenas adicionar o listener novo que sobrepõe a lógica visual
                     openSettingsBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         const modal = document.getElementById('settingsModal');
                         if (modal) {
                             modal.classList.remove('hidden');
-                            // Injeta o ID da empresa para o settingsLogic saber onde salvar
                             modal.dataset.companyId = userCompanyId;
                             openSettingsModal(); // Carrega Logo e Dados
                         }
                     });
+                } else {
+                    console.warn("⚠️ Botão de configurações (companySettingsBtn) não encontrado no HTML.");
                 }
                 // ------------------------------------------------------------
 
