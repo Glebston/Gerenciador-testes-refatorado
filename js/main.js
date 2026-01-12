@@ -1,6 +1,6 @@
 // js/main.js
 // ========================================================
-// ORQUESTRADOR CENTRAL (v6.1.1 - Fix Button ID)
+// ORQUESTRADOR CENTRAL (v6.2.0 - Branding Update)
 // ========================================================
 
 async function main() {
@@ -191,7 +191,46 @@ async function main() {
                     localStorage.setItem('userPlan', 'essencial');
                 }
                 
+                // ------------------------------------------------------------
+                // [MODIFICAÇÃO BRANDING] Atualização do Menu com Logo da Empresa
+                // ------------------------------------------------------------
                 UI.DOM.userEmail.textContent = userCompanyName;
+
+                try {
+                    // Busca configuração extra (Logo/Pagamento)
+                    const configRef = doc(db, 'companies', userCompanyId, 'config', 'payment');
+                    const configSnap = await getDoc(configRef);
+                    
+                    if (configSnap.exists()) {
+                        const configData = configSnap.data();
+                        
+                        // Se houver URL do Logo, substitui o ícone padrão
+                        if (configData.logoUrl) {
+                            const emailElement = UI.DOM.userEmail;
+                            // Tenta encontrar o container do botão (pai do texto)
+                            const btnContainer = emailElement.parentElement;
+                            
+                            if (btnContainer) {
+                                // Procura o SVG genérico (bonequinho) dentro do botão
+                                const genericIcon = btnContainer.querySelector('svg');
+                                
+                                if (genericIcon) {
+                                    const logoImg = document.createElement('img');
+                                    logoImg.src = configData.logoUrl;
+                                    // Classes para garantir visual circular e contido
+                                    logoImg.className = "w-8 h-8 rounded-full object-contain bg-white border border-gray-200"; 
+                                    logoImg.alt = "Logo Empresa";
+                                    
+                                    genericIcon.replaceWith(logoImg);
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn("⚠️ Erro ao carregar branding no menu:", err);
+                }
+                // ------------------------------------------------------------
+
                 if (UI.DOM.periodFilter) UI.DOM.periodFilter.value = 'thisMonth';
 
                 console.log("🔌 [MAIN] Conectando serviços...");
@@ -213,7 +252,6 @@ async function main() {
                 
                 // [CORREÇÃO] Conexão Vital: Botão de Configurações (Nome correto do botão)
                 // ------------------------------------------------------------
-                // Alterado de 'openSettingsBtn' para 'companySettingsBtn' (nome usado no HTML)
                 const openSettingsBtn = document.getElementById('companySettingsBtn'); 
                 if (openSettingsBtn) {
                     openSettingsBtn.addEventListener('click', (e) => {
