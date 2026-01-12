@@ -1,8 +1,8 @@
 // js/ui/orderRenderer.js
 // ==========================================================
-// MÓDULO ORDER RENDERER (v5.33.0 - UX Fix Aguardando Retirada)
+// MÓDULO ORDER RENDERER (v5.35.0 - Clean UI Update)
 // Responsabilidade: Renderizar pedidos e gerenciar links PRO.
-// Status: ATUALIZADO (Correção Visual de Atraso)
+// Status: ATUALIZADO (Remoção de Botão Externo Quebrado)
 // ==========================================================
 
 import { DOM, SIZES_ORDER } from './dom.js';
@@ -329,18 +329,6 @@ export const viewOrder = (order) => {
     const currentPlan = getUserPlan(); 
     const isPro = currentPlan === 'pro'; // Verificação técnica segura
 
-    const externalBtnClass = isPro 
-        ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md" 
-        : "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200";
-
-    const externalIcon = isPro
-        ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`
-        : `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>`;
-
-    const lockBadge = !isPro 
-        ? `<span class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm z-10">PREMIUM</span>` 
-        : '';
-
     let subTotal = 0;
     
     // ATUALIZAÇÃO: Map agora inclui index para Deep Linking
@@ -389,7 +377,7 @@ export const viewOrder = (order) => {
             unitPriceHtml = `R$ ${(p.unitPrice || 0).toFixed(2)}`;
         }
 
-        // --- LÓGICA DO BOTÃO DE LINK ESPECÍFICO (DEEP LINK) ---
+        // --- LÓGICA DO BOTÃO DE LINK ESPECÍFICO (DEEP LINK - MANTIDO) ---
         let partLinkBtn = '';
         if (isPro && p.partInputType === 'detalhado') {
             partLinkBtn = `
@@ -525,31 +513,6 @@ export const viewOrder = (order) => {
                     </div>
                 </div>
 
-                <div class="relative inline-block text-left group">
-                    <button id="externalActionsBtn" type="button" class="${externalBtnClass} font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors relative" ${!isPro ? 'disabled' : ''}>
-                        ${lockBadge}
-                        ${externalIcon}
-                        Externo
-                        ${isPro ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>` : ''}
-                    </button>
-
-                    ${!isPro ? `
-                    <div class="absolute bottom-full right-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded py-2 px-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 text-center">
-                        Funcionalidade exclusiva do <strong>Plano PREMIUM</strong>.<br>Preenchimento automático pelo cliente.
-                        <div class="absolute top-full right-6 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                    ` : `
-                    <div id="externalMenu" class="hidden absolute right-0 bottom-full mb-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 overflow-hidden">
-                        <div class="py-1" role="menu">
-                            <button id="generateFillLinkBtn" data-id="${order.id}" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                <svg class="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                                Link de Preenchimento (Pedido Completo)
-                            </button>
-                        </div>
-                    </div>
-                    `}
-                </div>
-
                 <button id="closeViewBtn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors shadow-sm">Fechar</button>
             </div>
         </div>`;
@@ -577,7 +540,7 @@ export const viewOrder = (order) => {
 
     setupDropdown('whatsappMenuBtn', 'whatsappMenu');
     setupDropdown('documentsBtn', 'documentsMenu');
-    setupDropdown('externalActionsBtn', 'externalMenu');
+    // REMOVIDO: Setup do botão Externo, pois ele foi retirado
 
     // Botão Fechar Modal
     const btnClose = document.getElementById('closeViewBtn');
@@ -644,16 +607,10 @@ export const viewOrder = (order) => {
         }
     };
 
-    // 2. Listener para o botão Geral (Rodapé)
-    const btnFill = document.getElementById('generateFillLinkBtn');
-    if (btnFill) {
-        btnFill.addEventListener('click', (e) => {
-            e.preventDefault();
-            handleGenerateLink(btnFill, null);
-        });
-    }
+    // 2. Listener para o botão Geral (Rodapé) - REMOVIDO
+    // O botão generateFillLinkBtn não existe mais no HTML do rodapé.
 
-    // 3. Listeners para os botões Específicos (Por Peça - Deep Link)
+    // 3. Listeners para os botões Específicos (Por Peça - Deep Link) - MANTIDO
     document.querySelectorAll('.generate-part-link-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation(); // Evita que o clique afete a linha da tabela se houver listener lá
