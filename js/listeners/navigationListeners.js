@@ -1,7 +1,7 @@
 // js/listeners/navigationListeners.js
 // ==========================================================
-// MÓDULO NAVIGATION LISTENERS (v5.38.0 - Centralized Event Fix)
-// Status: BLINDADO (Lógica de Clique Centralizada)
+// MÓDULO NAVIGATION LISTENERS (v5.39.0 - FAB Live Fix)
+// Status: BLINDADO (Busca dinâmica de ID + Correção CSS)
 // ==========================================================
 
 import { resetIdleTimer } from '../utils.js'; 
@@ -39,8 +39,7 @@ export function initializeNavigationListeners(UI, deps) {
         });
     }
 
-    // --- 3. CONTROLE MESTRE DE CLIQUES (A Solução Sênior) ---
-    // Em vez de espalhar listeners, centralizamos a lógica de decisão.
+    // --- 3. CONTROLE MESTRE DE CLIQUES (SOLUÇÃO LIVE DOM) ---
     document.addEventListener('click', (e) => {
         
         // A. Lógica do Dropdown de Usuário
@@ -49,61 +48,67 @@ export function initializeNavigationListeners(UI, deps) {
             const clickedInsideUserMenu = UI.DOM.userDropdown.contains(e.target);
 
             if (clickedUserBtn) {
-                // Toggle
                 UI.DOM.userDropdown.classList.toggle('hidden');
             } else if (!clickedInsideUserMenu) {
-                // Fecha se clicou fora
                 UI.DOM.userDropdown.classList.add('hidden');
             }
         }
 
-        // B. Lógica do Botão Flutuante (FAB) - CORREÇÃO DEFINITIVA
-        if (UI.DOM.fabBtn && UI.DOM.fabMenu) {
-            // Verifica se o clique foi no botão ou em algum elemento dentro dele (ícone, path, svg)
-            const clickedFabBtn = UI.DOM.fabBtn.contains(e.target);
-            const clickedInsideFabMenu = UI.DOM.fabMenu.contains(e.target);
+        // B. Lógica do Botão Flutuante (FAB) - CORREÇÃO CSS & LIVE REFERENCE
+        // Importante: Buscamos pelo ID no momento do clique para garantir a referência viva
+        const fabBtn = document.getElementById('fabMainBtn');
+        const fabMenu = document.getElementById('fabMenu');
 
-            // Elementos visuais para animação
-            const icon = UI.DOM.fabBtn.querySelector('i, svg');
+        if (fabBtn && fabMenu) {
+            const clickedFabBtn = fabBtn.contains(e.target);
+            const clickedInsideFabMenu = fabMenu.contains(e.target);
+            const icon = fabBtn.querySelector('svg');
+
+            // Funções Auxiliares para lidar com as classes Tailwind (Transições)
+            const openFab = () => {
+                // Remove as classes que escondem
+                fabMenu.classList.remove('invisible', 'opacity-0', 'translate-y-4');
+                // Adiciona as classes que mostram
+                fabMenu.classList.add('opacity-100', 'translate-y-0');
+                
+                // Visual do Botão (Vermelho/X)
+                fabBtn.classList.remove('bg-blue-600');
+                fabBtn.classList.add('bg-red-600');
+                if (icon) icon.classList.add('rotate-45');
+            };
+
+            const closeFab = () => {
+                // Remove as classes que mostram
+                fabMenu.classList.remove('opacity-100', 'translate-y-0');
+                // Adiciona as classes que escondem (retorna ao estado original do HTML)
+                fabMenu.classList.add('invisible', 'opacity-0', 'translate-y-4');
+                
+                // Visual do Botão (Azul/+)
+                fabBtn.classList.remove('bg-red-600');
+                fabBtn.classList.add('bg-blue-600');
+                if (icon) icon.classList.remove('rotate-45');
+            };
 
             if (clickedFabBtn) {
-                // --- CENÁRIO 1: Clicou no Botão FAB ---
-                // Verifica o estado ATUAL antes de decidir
-                const isCurrentlyClosed = UI.DOM.fabMenu.classList.contains('hidden');
-
-                if (isCurrentlyClosed) {
-                    // ABRIR
-                    UI.DOM.fabMenu.classList.remove('hidden');
-                    // Animação de X e Cor Vermelha
-                    UI.DOM.fabBtn.classList.remove('bg-blue-600');
-                    UI.DOM.fabBtn.classList.add('bg-red-600');
-                    if (icon) icon.classList.add('rotate-45');
+                // Verifica o estado atual baseando-se na classe 'invisible'
+                const isClosed = fabMenu.classList.contains('invisible');
+                
+                if (isClosed) {
+                    openFab();
                 } else {
-                    // FECHAR
-                    UI.DOM.fabMenu.classList.add('hidden');
-                    // Resetar Animação e Cor Azul
-                    UI.DOM.fabBtn.classList.remove('bg-red-600');
-                    UI.DOM.fabBtn.classList.add('bg-blue-600');
-                    if (icon) icon.classList.remove('rotate-45');
+                    closeFab();
                 }
-
             } else if (!clickedInsideFabMenu) {
-                // --- CENÁRIO 2: Clicou Fora (Reset Geral) ---
-                // Só executa se o menu estiver aberto, para evitar reflow desnecessário
-                if (!UI.DOM.fabMenu.classList.contains('hidden')) {
-                    UI.DOM.fabMenu.classList.add('hidden');
-                    
-                    // Garante que o botão volte ao estado original (Azul/+)
-                    UI.DOM.fabBtn.classList.remove('bg-red-600');
-                    UI.DOM.fabBtn.classList.add('bg-blue-600');
-                    if (icon) icon.classList.remove('rotate-45');
+                // Se clicar fora, fecha (apenas se já não estiver fechado)
+                if (!fabMenu.classList.contains('invisible')) {
+                    closeFab();
                 }
             }
-            // Cenário 3 (Clicou DENTRO do menu): Não faz nada, deixa a ação do link acontecer.
+            // Se clicou dentro do menu, não faz nada (deixa o botão funcionar)
         }
     });
 
-    // --- 4. Outros Listeners (Sem conflito de clique) ---
+    // --- 4. Outros Listeners ---
 
     // Toggle View (Pendentes/Entregues)
     if (UI.DOM.toggleViewBtn) {
