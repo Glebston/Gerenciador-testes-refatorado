@@ -1,8 +1,8 @@
 // js/listeners/navigationListeners.js
 
-// v5.36.0: Correção do FAB (Event Bubbling Fix)
+// v5.37.0: Correção Definitiva do FAB (Estado Explícito + StopPropagation)
 // O 'UI' agora é injetado pelo main.js (Orquestrador)
-import { resetIdleTimer } from '../utils.js'; // Importa o utilitário
+import { resetIdleTimer } from '../utils.js'; 
 
 /**
  * Inicializa listeners de navegação, menu de usuário e eventos globais da UI.
@@ -40,26 +40,41 @@ export function initializeNavigationListeners(UI, deps) {
 
     // --- Menu de Usuário (Topo) ---
     UI.DOM.userMenuBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Previne fechamento imediato
+        e.stopPropagation(); 
         UI.DOM.userDropdown.classList.toggle('hidden');
     });
     
-    // --- LÓGICA DO BOTÃO FLUTUANTE (FAB) - CORRIGIDO ---
-    // Verifica se os elementos existem para evitar erros
+    // --- LÓGICA DO BOTÃO FLUTUANTE (FAB) - BLINDADA ---
     if (UI.DOM.fabBtn && UI.DOM.fabMenu) {
         UI.DOM.fabBtn.addEventListener('click', (e) => {
-            // [CORREÇÃO CRÍTICA] Impede que o clique suba para o document e feche o menu instantaneamente
+            // 1. Impede que o clique feche o menu imediatamente (Bubbling)
             e.stopPropagation(); 
             
-            UI.DOM.fabMenu.classList.toggle('hidden');
+            const menu = UI.DOM.fabMenu;
+            const btn = UI.DOM.fabBtn;
+            const icon = btn.querySelector('i, svg');
             
-            // Efeito visual no botão (opcional, rotaciona se for ícone)
-            const icon = UI.DOM.fabBtn.querySelector('i, svg');
-            if (icon) icon.classList.toggle('rotate-45'); // Classe genérica de rotação se houver
-            
-            // Alterna a cor ou estilo visual para indicar estado "Ativo"
-            UI.DOM.fabBtn.classList.toggle('bg-red-600'); // Exemplo: vira vermelho para fechar
-            UI.DOM.fabBtn.classList.toggle('bg-blue-600'); // Exemplo: volta para azul
+            // 2. Verifica o estado REAL do menu (Verdade Única)
+            const isClosed = menu.classList.contains('hidden');
+
+            if (isClosed) {
+                // AÇÃO: ABRIR
+                menu.classList.remove('hidden');
+                
+                // Visual: Estado Ativo (Vermelho/X)
+                btn.classList.remove('bg-blue-600');
+                btn.classList.add('bg-red-600');
+                if (icon) icon.classList.add('rotate-45');
+                
+            } else {
+                // AÇÃO: FECHAR
+                menu.classList.add('hidden');
+                
+                // Visual: Estado Inativo (Azul/+)
+                btn.classList.remove('bg-red-600');
+                btn.classList.add('bg-blue-600');
+                if (icon) icon.classList.remove('rotate-45');
+            }
         });
     }
 
@@ -70,18 +85,22 @@ export function initializeNavigationListeners(UI, deps) {
             UI.DOM.userDropdown.classList.add('hidden');
         }
 
-        // 2. Fecha Menu FAB
+        // 2. Fecha Menu FAB (Sincronizado)
         if (UI.DOM.fabBtn && UI.DOM.fabMenu) {
             // Se o clique NÃO foi no botão E NÃO foi no menu -> Fecha
             if (!UI.DOM.fabBtn.contains(e.target) && !UI.DOM.fabMenu.contains(e.target)) {
+                
+                // Só executa se estiver aberto, para economizar processamento
                 if (!UI.DOM.fabMenu.classList.contains('hidden')) {
                     UI.DOM.fabMenu.classList.add('hidden');
                     
-                    // Reseta estilos visuais do botão
-                    const icon = UI.DOM.fabBtn.querySelector('i, svg');
+                    // Reseta estilos visuais do botão forçadamente para garantir sincronia
+                    const btn = UI.DOM.fabBtn;
+                    const icon = btn.querySelector('i, svg');
+                    
+                    btn.classList.remove('bg-red-600');
+                    btn.classList.add('bg-blue-600');
                     if (icon) icon.classList.remove('rotate-45');
-                    UI.DOM.fabBtn.classList.remove('bg-red-600');
-                    UI.DOM.fabBtn.classList.add('bg-blue-600');
                 }
             }
         }
