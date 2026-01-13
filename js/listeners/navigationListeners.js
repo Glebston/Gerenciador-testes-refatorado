@@ -1,13 +1,12 @@
 // js/listeners/navigationListeners.js
 // ==========================================================
-// MÓDULO NAVIGATION LISTENERS (v5.40.0 - DEBUG MODE)
-// Status: DEBUG ATIVO (Verifique o Console do Navegador F12)
+// MÓDULO NAVIGATION LISTENERS (v5.41.0 - STYLE FORCE)
+// Status: BLINDADO (Força Bruta de Visibilidade)
 // ==========================================================
 
 import { resetIdleTimer } from '../utils.js'; 
 
 export function initializeNavigationListeners(UI, deps) {
-    console.log("🚀 [DEBUG] Listener de Navegação Iniciado!");
 
     // --- 1. Eventos Globais de Sistema ---
     window.addEventListener('load', () => {
@@ -19,16 +18,18 @@ export function initializeNavigationListeners(UI, deps) {
     // Timer de inatividade
     ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => window.addEventListener(event, resetIdleTimer));
 
-    // --- 2. Navegação Principal ---
+    // --- 2. Navegação Principal (Dashboard) ---
     if (UI.DOM.financeDashboardBtn) {
         UI.DOM.financeDashboardBtn.addEventListener('click', () => {
-            // ... (lógica do dashboard mantida)
             let { currentDashboardView } = deps.getState();
+            
             currentDashboardView = currentDashboardView === 'orders' ? 'finance' : 'orders';
             deps.setState({ currentDashboardView }); 
+
             UI.DOM.ordersDashboard.classList.toggle('hidden', currentDashboardView !== 'orders');
             UI.DOM.financeDashboard.classList.toggle('hidden', currentDashboardView === 'orders');
             UI.updateNavButton(currentDashboardView);
+            
             if (currentDashboardView === 'finance') {
                 UI.renderFinanceDashboard(deps.getTransactions(), deps.getConfig());
             } else {
@@ -38,67 +39,79 @@ export function initializeNavigationListeners(UI, deps) {
         });
     }
 
-    // --- 3. CONTROLE MESTRE DE CLIQUES (DEBUG) ---
+    // --- 3. CONTROLE MESTRE DE CLIQUES (FAB FIXED) ---
     document.addEventListener('click', (e) => {
-        // console.log("🖱️ [DEBUG] Clique detectado em:", e.target); // Descomente se precisar ver tudo
-
-        // A. Dropdown Usuário
+        
+        // A. Lógica do Dropdown de Usuário
         if (UI.DOM.userMenuBtn && UI.DOM.userDropdown) {
-            if (UI.DOM.userMenuBtn.contains(e.target)) {
+            const clickedUserBtn = UI.DOM.userMenuBtn.contains(e.target);
+            const clickedInsideUserMenu = UI.DOM.userDropdown.contains(e.target);
+
+            if (clickedUserBtn) {
                 UI.DOM.userDropdown.classList.toggle('hidden');
-            } else if (!UI.DOM.userDropdown.contains(e.target)) {
+            } else if (!clickedInsideUserMenu) {
                 UI.DOM.userDropdown.classList.add('hidden');
             }
         }
 
-        // B. Lógica do FAB (Botão Flutuante)
+        // B. Lógica do Botão Flutuante (FAB) - COM FORÇA BRUTA VISUAL
         const fabBtn = document.getElementById('fabMainBtn');
         const fabMenu = document.getElementById('fabMenu');
 
-        if (!fabBtn || !fabMenu) {
-            // Se isso aparecer no console ao clicar, é porque o ID no HTML ainda está errado ou cache velho
-            console.error("❌ [DEBUG] ERRO CRÍTICO: Elementos FAB não encontrados no DOM!", { fabBtn, fabMenu });
-            return;
-        }
+        if (fabBtn && fabMenu) {
+            const clickedFabBtn = fabBtn.contains(e.target);
+            const clickedInsideFabMenu = fabMenu.contains(e.target);
+            const icon = fabBtn.querySelector('svg');
 
-        const clickedFabBtn = fabBtn.contains(e.target);
-        const clickedInsideFabMenu = fabMenu.contains(e.target);
-        const icon = fabBtn.querySelector('svg');
+            // --- FUNÇÕES DE ANIMAÇÃO (Direct Style Manipulation) ---
+            const openFab = () => {
+                // 1. Remove classes de ocultação do Tailwind
+                fabMenu.classList.remove('invisible', 'opacity-0', 'translate-y-4');
+                fabMenu.classList.add('translate-y-0'); // Mantém posição correta
+                
+                // 2. FORÇA BRUTA: Injeta CSS direto para garantir visibilidade
+                fabMenu.style.visibility = 'visible';
+                fabMenu.style.opacity = '1';
+                fabMenu.style.pointerEvents = 'auto'; // Garante que os botões funcionem
+                
+                // 3. Visual do Botão (Vermelho)
+                fabBtn.classList.remove('bg-blue-600');
+                fabBtn.classList.add('bg-red-600');
+                if (icon) icon.classList.add('rotate-45');
+            };
 
-        // Funções Visuais
-        const openFab = () => {
-            console.log("🟢 [DEBUG] Abrindo Menu FAB");
-            fabMenu.classList.remove('invisible', 'opacity-0', 'translate-y-4');
-            fabMenu.classList.add('opacity-100', 'translate-y-0');
-            fabBtn.classList.remove('bg-blue-600');
-            fabBtn.classList.add('bg-red-600');
-            if (icon) icon.classList.add('rotate-45');
-        };
+            const closeFab = () => {
+                // 1. Volta classes de ocultação
+                fabMenu.classList.remove('translate-y-0');
+                fabMenu.classList.add('invisible', 'opacity-0', 'translate-y-4');
+                
+                // 2. FORÇA BRUTA: Limpa o CSS injetado
+                fabMenu.style.visibility = '';
+                fabMenu.style.opacity = '';
+                fabMenu.style.pointerEvents = '';
+                
+                // 3. Visual do Botão (Azul)
+                fabBtn.classList.remove('bg-red-600');
+                fabBtn.classList.add('bg-blue-600');
+                if (icon) icon.classList.remove('rotate-45');
+            };
 
-        const closeFab = () => {
-            console.log("🔴 [DEBUG] Fechando Menu FAB");
-            fabMenu.classList.remove('opacity-100', 'translate-y-0');
-            fabMenu.classList.add('invisible', 'opacity-0', 'translate-y-4');
-            fabBtn.classList.remove('bg-red-600');
-            fabBtn.classList.add('bg-blue-600');
-            if (icon) icon.classList.remove('rotate-45');
-        };
-
-        if (clickedFabBtn) {
-            console.log("🎯 [DEBUG] Clique confirmado no Botão Principal!");
-            const isClosed = fabMenu.classList.contains('invisible');
-            console.log("❓ [DEBUG] O menu está invisível?", isClosed);
-            
-            if (isClosed) {
-                openFab();
-            } else {
-                closeFab();
-            }
-        } else if (!clickedInsideFabMenu) {
-            // Se clicar fora e estiver aberto, fecha
-            if (!fabMenu.classList.contains('invisible')) {
-                console.log("👋 [DEBUG] Clicou fora, fechando.");
-                closeFab();
+            if (clickedFabBtn) {
+                // Verifica estado atual pela opacidade computada
+                const currentOpacity = window.getComputedStyle(fabMenu).opacity;
+                const isClosed = currentOpacity === '0' || fabMenu.classList.contains('invisible');
+                
+                if (isClosed) {
+                    openFab();
+                } else {
+                    closeFab();
+                }
+            } else if (!clickedInsideFabMenu) {
+                // Clicou fora? Fecha.
+                const currentOpacity = window.getComputedStyle(fabMenu).opacity;
+                if (currentOpacity !== '0' && !fabMenu.classList.contains('invisible')) {
+                    closeFab();
+                }
             }
         }
     });
