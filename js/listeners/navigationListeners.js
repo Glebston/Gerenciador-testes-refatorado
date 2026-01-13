@@ -1,7 +1,7 @@
 // js/listeners/navigationListeners.js
 // ==========================================================
-// MÓDULO NAVIGATION LISTENERS (v5.41.0 - STYLE FORCE)
-// Status: BLINDADO (Força Bruta de Visibilidade)
+// MÓDULO NAVIGATION LISTENERS (v6.0.0 - BACKDROP STRATEGY)
+// Status: SOLUÇÃO DEFINITIVA (Simples e Robusta)
 // ==========================================================
 
 import { resetIdleTimer } from '../utils.js'; 
@@ -18,14 +18,12 @@ export function initializeNavigationListeners(UI, deps) {
     // Timer de inatividade
     ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => window.addEventListener(event, resetIdleTimer));
 
-    // --- 2. Navegação Principal (Dashboard) ---
+    // --- 2. Navegação Principal ---
     if (UI.DOM.financeDashboardBtn) {
         UI.DOM.financeDashboardBtn.addEventListener('click', () => {
             let { currentDashboardView } = deps.getState();
-            
             currentDashboardView = currentDashboardView === 'orders' ? 'finance' : 'orders';
             deps.setState({ currentDashboardView }); 
-
             UI.DOM.ordersDashboard.classList.toggle('hidden', currentDashboardView !== 'orders');
             UI.DOM.financeDashboard.classList.toggle('hidden', currentDashboardView === 'orders');
             UI.updateNavButton(currentDashboardView);
@@ -39,84 +37,88 @@ export function initializeNavigationListeners(UI, deps) {
         });
     }
 
-    // --- 3. CONTROLE MESTRE DE CLIQUES (FAB FIXED) ---
-    document.addEventListener('click', (e) => {
-        
-        // A. Lógica do Dropdown de Usuário
-        if (UI.DOM.userMenuBtn && UI.DOM.userDropdown) {
-            const clickedUserBtn = UI.DOM.userMenuBtn.contains(e.target);
-            const clickedInsideUserMenu = UI.DOM.userDropdown.contains(e.target);
+    // --- 3. CONTROLE MESTRE DE CLIQUES (FAB BACKDROP SYSTEM) ---
+    
+    // Captura os elementos soltos no DOM (Nova Estrutura)
+    const fabMainBtn = document.getElementById('fabMainBtn');
+    const fabMenu = document.getElementById('fabMenu');
+    const fabBackdrop = document.getElementById('fabBackdrop');
+    const iconPlus = document.getElementById('fabIconPlus');
+    const iconClose = document.getElementById('fabIconClose');
 
-            if (clickedUserBtn) {
-                UI.DOM.userDropdown.classList.toggle('hidden');
-            } else if (!clickedInsideUserMenu) {
-                UI.DOM.userDropdown.classList.add('hidden');
+    // Função ÚNICA que abre ou fecha tudo
+    const toggleFabSystem = () => {
+        if (!fabMenu || !fabBackdrop) return;
+
+        // Verifica se está fechado (contém 'hidden')
+        const isClosed = fabMenu.classList.contains('hidden');
+
+        if (isClosed) {
+            // ABRIR: Remove 'hidden' do menu e da cortina
+            fabMenu.classList.remove('hidden');
+            fabBackdrop.classList.remove('hidden');
+            
+            // Visual do Botão: Fica Vermelho
+            if (fabMainBtn) {
+                fabMainBtn.classList.remove('bg-blue-600');
+                fabMainBtn.classList.add('bg-red-600');
             }
+            
+            // Animação de Ícones: Some o (+) e aparece o (X)
+            if (iconPlus) iconPlus.classList.add('opacity-0', 'rotate-90');
+            if (iconClose) iconClose.classList.remove('opacity-0', 'rotate-90');
+            
+        } else {
+            // FECHAR: Adiciona 'hidden' de volta
+            fabMenu.classList.add('hidden');
+            fabBackdrop.classList.add('hidden');
+            
+            // Visual do Botão: Volta pra Azul
+            if (fabMainBtn) {
+                fabMainBtn.classList.remove('bg-red-600');
+                fabMainBtn.classList.add('bg-blue-600');
+            }
+            
+            // Animação de Ícones: Volta o (+) e some o (X)
+            if (iconPlus) iconPlus.classList.remove('opacity-0', 'rotate-90');
+            if (iconClose) iconClose.classList.add('opacity-0', 'rotate-90');
         }
+    };
 
-        // B. Lógica do Botão Flutuante (FAB) - COM FORÇA BRUTA VISUAL
-        const fabBtn = document.getElementById('fabMainBtn');
-        const fabMenu = document.getElementById('fabMenu');
+    // Listener A: Clique no Botão Principal
+    if (fabMainBtn) {
+        fabMainBtn.onclick = (e) => {
+            e.stopPropagation(); // Impede que o clique passe para o document
+            toggleFabSystem();
+        };
+    }
 
-        if (fabBtn && fabMenu) {
-            const clickedFabBtn = fabBtn.contains(e.target);
-            const clickedInsideFabMenu = fabMenu.contains(e.target);
-            const icon = fabBtn.querySelector('svg');
+    // Listener B: Clique na Cortina Invisível (Fundo)
+    if (fabBackdrop) {
+        fabBackdrop.onclick = () => {
+            toggleFabSystem(); // Clicou fora? Fecha tudo.
+        };
+    }
 
-            // --- FUNÇÕES DE ANIMAÇÃO (Direct Style Manipulation) ---
-            const openFab = () => {
-                // 1. Remove classes de ocultação do Tailwind
-                fabMenu.classList.remove('invisible', 'opacity-0', 'translate-y-4');
-                fabMenu.classList.add('translate-y-0'); // Mantém posição correta
-                
-                // 2. FORÇA BRUTA: Injeta CSS direto para garantir visibilidade
-                fabMenu.style.visibility = 'visible';
-                fabMenu.style.opacity = '1';
-                fabMenu.style.pointerEvents = 'auto'; // Garante que os botões funcionem
-                
-                // 3. Visual do Botão (Vermelho)
-                fabBtn.classList.remove('bg-blue-600');
-                fabBtn.classList.add('bg-red-600');
-                if (icon) icon.classList.add('rotate-45');
-            };
+    // Listener C: Clique em qualquer opção do menu
+    if (fabMenu) {
+        fabMenu.addEventListener('click', () => {
+            toggleFabSystem(); // Escolheu uma opção? Fecha o menu.
+        });
+    }
 
-            const closeFab = () => {
-                // 1. Volta classes de ocultação
-                fabMenu.classList.remove('translate-y-0');
-                fabMenu.classList.add('invisible', 'opacity-0', 'translate-y-4');
-                
-                // 2. FORÇA BRUTA: Limpa o CSS injetado
-                fabMenu.style.visibility = '';
-                fabMenu.style.opacity = '';
-                fabMenu.style.pointerEvents = '';
-                
-                // 3. Visual do Botão (Azul)
-                fabBtn.classList.remove('bg-red-600');
-                fabBtn.classList.add('bg-blue-600');
-                if (icon) icon.classList.remove('rotate-45');
-            };
-
-            if (clickedFabBtn) {
-                // Verifica estado atual pela opacidade computada
-                const currentOpacity = window.getComputedStyle(fabMenu).opacity;
-                const isClosed = currentOpacity === '0' || fabMenu.classList.contains('invisible');
-                
-                if (isClosed) {
-                    openFab();
-                } else {
-                    closeFab();
-                }
-            } else if (!clickedInsideFabMenu) {
-                // Clicou fora? Fecha.
-                const currentOpacity = window.getComputedStyle(fabMenu).opacity;
-                if (currentOpacity !== '0' && !fabMenu.classList.contains('invisible')) {
-                    closeFab();
-                }
+    // --- 4. Dropdown de Usuário (Mantido Simples) ---
+    document.addEventListener('click', (e) => {
+        if (UI.DOM.userMenuBtn && UI.DOM.userDropdown) {
+            if (UI.DOM.userMenuBtn.contains(e.target)) {
+                UI.DOM.userDropdown.classList.toggle('hidden');
+            } else if (!UI.DOM.userDropdown.contains(e.target)) {
+                UI.DOM.userDropdown.classList.add('hidden');
             }
         }
     });
 
-    // --- 4. Outros Listeners (Mantidos) ---
+    // --- Outros Listeners (Mantidos) ---
     if (UI.DOM.toggleViewBtn) {
         UI.DOM.toggleViewBtn.addEventListener('click', () => {
             let { currentOrdersView } = deps.getState();
