@@ -1,28 +1,17 @@
 // js/listeners/navigationListeners.js
 
-// v5.7.21: Removida a importação estática de 'UI'.
+// v5.36.0: Correção do FAB (Event Bubbling Fix)
 // O 'UI' agora é injetado pelo main.js (Orquestrador)
-// import * as UI from '../ui.js'; 
 import { resetIdleTimer } from '../utils.js'; // Importa o utilitário
 
 /**
  * Inicializa listeners de navegação, menu de usuário e eventos globais da UI.
  * @param {object} UI - O módulo UI (injetado pelo main.js)
  * @param {object} deps - Dependências injetadas (handlers, state, etc.)
- * @param {Function} deps.handleBackup - Handler para o backup
- * @param {Function} deps.handleRestore - Handler para a restauração
- * @param {Function} deps.getOrders - Getter para getAllOrders
- * @param {Function} deps.getTransactions - Getter para getAllTransactions
- * @param {Function} deps.getConfig - Getter para userBankBalanceConfig
- * @param {Function} deps.getState - Getter para o estado da view (currentDashboardView, currentOrdersView)
- * @param {Function} deps.setState - Setter para o estado da view
  */
-// v5.7.21: A função agora aceita 'UI' como o primeiro argumento.
 export function initializeNavigationListeners(UI, deps) {
 
     // --- Eventos Globais da Aplicação ---
-    // v5.7.21: Corrigido o 'UI.handleCookieConsent()' que estava quebrado
-    // (estava usando a UI estática nula)
     window.addEventListener('load', () => {
         if (localStorage.getItem('cookieConsent') !== 'true') {
             UI.DOM.cookieBanner.classList.remove('hidden');
@@ -30,48 +19,86 @@ export function initializeNavigationListeners(UI, deps) {
     });
     ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => window.addEventListener(event, resetIdleTimer));
 
-    // --- Navegação Principal ---
+    // --- Navegação Principal (Dashboard Toggle) ---
     UI.DOM.financeDashboardBtn.addEventListener('click', () => {
         let { currentDashboardView } = deps.getState();
         
         currentDashboardView = currentDashboardView === 'orders' ? 'finance' : 'orders';
-        deps.setState({ currentDashboardView }); // Atualiza o estado central
+        deps.setState({ currentDashboardView }); 
 
         UI.DOM.ordersDashboard.classList.toggle('hidden', currentDashboardView !== 'orders');
         UI.DOM.financeDashboard.classList.toggle('hidden', currentDashboardView === 'orders');
         UI.updateNavButton(currentDashboardView);
         
         if (currentDashboardView === 'finance') {
-            // Renderiza o dashboard financeiro (KPIs e lista) ao trocar para esta view
             UI.renderFinanceDashboard(deps.getTransactions(), deps.getConfig());
         } else {
-            // Renderiza os pedidos ao trocar para esta view
             const { currentOrdersView } = deps.getState();
             UI.renderOrders(deps.getOrders(), currentOrdersView);
         }
     });
 
-    UI.DOM.userMenuBtn.addEventListener('click', () => UI.DOM.userDropdown.classList.toggle('hidden'));
+    // --- Menu de Usuário (Topo) ---
+    UI.DOM.userMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Previne fechamento imediato
+        UI.DOM.userDropdown.classList.toggle('hidden');
+    });
     
+    // --- LÓGICA DO BOTÃO FLUTUANTE (FAB) - CORRIGIDO ---
+    // Verifica se os elementos existem para evitar erros
+    if (UI.DOM.fabBtn && UI.DOM.fabMenu) {
+        UI.DOM.fabBtn.addEventListener('click', (e) => {
+            // [CORREÇÃO CRÍTICA] Impede que o clique suba para o document e feche o menu instantaneamente
+            e.stopPropagation(); 
+            
+            UI.DOM.fabMenu.classList.toggle('hidden');
+            
+            // Efeito visual no botão (opcional, rotaciona se for ícone)
+            const icon = UI.DOM.fabBtn.querySelector('i, svg');
+            if (icon) icon.classList.toggle('rotate-45'); // Classe genérica de rotação se houver
+            
+            // Alterna a cor ou estilo visual para indicar estado "Ativo"
+            UI.DOM.fabBtn.classList.toggle('bg-red-600'); // Exemplo: vira vermelho para fechar
+            UI.DOM.fabBtn.classList.toggle('bg-blue-600'); // Exemplo: volta para azul
+        });
+    }
+
+    // --- FECHAMENTO GLOBAL DE MENUS (Click Outside) ---
     document.addEventListener('click', (e) => { 
+        // 1. Fecha Dropdown de Usuário
         if (UI.DOM.userMenuBtn && !UI.DOM.userMenuBtn.parentElement.contains(e.target)) {
             UI.DOM.userDropdown.classList.add('hidden');
         }
+
+        // 2. Fecha Menu FAB
+        if (UI.DOM.fabBtn && UI.DOM.fabMenu) {
+            // Se o clique NÃO foi no botão E NÃO foi no menu -> Fecha
+            if (!UI.DOM.fabBtn.contains(e.target) && !UI.DOM.fabMenu.contains(e.target)) {
+                if (!UI.DOM.fabMenu.classList.contains('hidden')) {
+                    UI.DOM.fabMenu.classList.add('hidden');
+                    
+                    // Reseta estilos visuais do botão
+                    const icon = UI.DOM.fabBtn.querySelector('i, svg');
+                    if (icon) icon.classList.remove('rotate-45');
+                    UI.DOM.fabBtn.classList.remove('bg-red-600');
+                    UI.DOM.fabBtn.classList.add('bg-blue-600');
+                }
+            }
+        }
     });
 
-    // --- Menu Dropdown do Usuário ---
-
+    // --- Alternar Visualização (Pendentes / Entregues) ---
     UI.DOM.toggleViewBtn.addEventListener('click', () => {
         let { currentOrdersView } = deps.getState();
 
         currentOrdersView = currentOrdersView === 'pending' ? 'delivered' : 'pending';
-        deps.setState({ currentOrdersView }); // Atualiza o estado central
+        deps.setState({ currentOrdersView });
 
         UI.DOM.toggleViewBtn.textContent = currentOrdersView === 'pending' ? 'Ver Entregues' : 'Ver Pendentes';
-        // Faz uma renderização completa com base no cache local ao trocar de view
         UI.renderOrders(deps.getOrders(), currentOrdersView);
     });
 
+    // --- Backup & Dados ---
     UI.DOM.backupBtn.addEventListener('click', deps.handleBackup);
     UI.DOM.restoreFileInput.addEventListener('change', deps.handleRestore);
 
@@ -83,7 +110,6 @@ export function initializeNavigationListeners(UI, deps) {
     });
 
     // --- Banners (Cookie & Backup) ---
-
     UI.DOM.cookieAcceptBtn.addEventListener('click', () => { 
         localStorage.setItem('cookieConsent', 'true'); 
         UI.DOM.cookieBanner.classList.add('hidden'); 
