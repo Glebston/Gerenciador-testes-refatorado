@@ -838,7 +838,7 @@
     <div id="cookieBanner" class="fixed bottom-0 w-full bg-gray-900 text-white p-4 flex justify-between items-center z-50">
     <p class="text-sm">
         Usamos cookies essenciais para segurança. Leia nossa 
-        <a href="https://paglucrobr.com/gestor-privacidade" target="_blank" class="underline text-blue-400 hover:text-blue-300 transition">Política de Privacidade</a>.
+        <a href="https://paglucrobr.com/gestor-termos-e-privacidade" target="_blank" class="underline text-blue-400 hover:text-blue-300 transition">Política de Privacidade</a>.
     </p>
     <button id="cookieAcceptBtn" class="bg-blue-600 px-4 py-1 rounded text-sm hover:bg-blue-700 transition">OK</button>
 </div>
@@ -853,9 +853,50 @@
     <datalist id="part-material-list"></datalist>
 
     <script src="js/main.js?v=6.2.0" type="module"></script>
+  
+    <script>
+    // --- CONFIGURAÇÃO DE AVISOS DE ATUALIZAÇÃO ---
+    // Mude este código sempre que quiser notificar os usuários
+    const VERSAO_ATUAL = "1.0.0"; // Ex: Mude para "1.0.1" na próxima vez
+    
+    const MENSAGEM_ATUALIZACAO = `
+        <strong>⚠️ Atualização Importante (v${VERSAO_ATUAL})</strong><br><br>
+        Realizamos melhorias na segurança do sistema.<br>
+        Recomendamos fortemente que você faça um <strong>Backup Manual</strong> 
+        dos seus dados hoje para garantir a integridade das informações.<br><br>
+        Obrigado por usar o PagLucro Gestor!
+    `;
+    // ---------------------------------------------
 
+    document.addEventListener("DOMContentLoaded", () => {
+        const ultimaVersaoVista = localStorage.getItem("versao_aviso_lida");
+        
+        // Se a versão mudou, mostra o aviso
+        if (ultimaVersaoVista !== VERSAO_ATUAL) {
+            const modal = document.getElementById('infoModal');
+            const msgElement = document.getElementById('infoModalMessage');
+            const btn = document.getElementById('infoModalCloseBtn');
+
+            if (modal && msgElement && btn) {
+                // Configura a mensagem (aceita HTML para negrito/quebra de linha)
+                msgElement.innerHTML = MENSAGEM_ATUALIZACAO;
+                
+                // Mostra o modal
+                modal.classList.remove('hidden');
+
+                // Quando clicar em OK, salva que já leu
+                btn.onclick = function() {
+                    localStorage.setItem("versao_aviso_lida", VERSAO_ATUAL);
+                    modal.classList.add('hidden');
+                };
+            }
+        }
+    });
+</script>
+    
 </body>
 </html>
+
 
 
 
