@@ -1,6 +1,6 @@
 // js/listeners/financeListeners.js
 // ===========================================================
-// MÓDULO FINANCE LISTENERS (v5.22.4 - FAB INTEGRATION)
+// MÓDULO FINANCE LISTENERS (v5.22.5 - FAB INTEGRATION)
 // ==========================================================
 
 /**
