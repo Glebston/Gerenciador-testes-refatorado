@@ -1,5 +1,6 @@
 // js/approval.js
 // ===========================================================
+// ==========================================================
 // MÓDULO PÚBLICO DE APROVAÇÃO (v2.0.3 - SMART DETAILS)
 // Correção 1: Leitura híbrida de whatsapp/whatsappNumber (Branding)
 // Correção 2: Exibição inteligente de Nº vs Cargo/Detalhe
