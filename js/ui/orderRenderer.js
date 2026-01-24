@@ -54,7 +54,7 @@ const getDeliveryCountdown = (deliveryDate, status) => {
     return { text: `Restam ${diffDays} dias`, color: 'green' };
 };
 
-const generateOrderCardHTML = (order, viewType) => {
+export const generateOrderCardHTML = (order, viewType) => {
     let totalValue = 0;
     (order.parts || []).forEach(p => {
         const standardQty = Object.values(p.sizes || {}).flatMap(cat => Object.values(cat)).reduce((s, c) => s + c, 0);
