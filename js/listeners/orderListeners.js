@@ -69,13 +69,101 @@ export function initializeOrderListeners(UI, deps) {
 
     const { getState, setState, getOptionsFromStorage, services, userCompanyName } = deps;
 
-    // --- GATILHO SECRETO DE MIGRAÇÃO (SHIFT + Clique no Título) ---
+    // --- 1. GATILHO SECRETO DE MIGRAÇÃO ---
     if (UI.DOM.modalTitle) {
         UI.DOM.modalTitle.addEventListener('click', (e) => {
             if (e.shiftKey) {
                 runDatabaseMigration(UI.showInfoModal);
             }
         });
+    } // <--- FECHE O IF DO MODAL AQUI
+
+    // --- 2. NOVA FUNCIONALIDADE: BUSCA GLOBAL COM CONTEXTO ---
+    const searchInput = document.getElementById('globalSearchInput');
+    const searchContainer = document.getElementById('searchResultsContainer');
+    const dashboard = document.getElementById('ordersDashboard');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+    if (searchInput && searchContainer && dashboard) {
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.trim().toLowerCase();
+            const resultsPending = document.getElementById('resultsPendingList');
+            const resultsDelivered = document.getElementById('resultsDeliveredList');
+            const wrapperPending = document.getElementById('resultsPendingWrapper');
+            const wrapperDelivered = document.getElementById('resultsDeliveredWrapper');
+            const noResults = document.getElementById('noResultsMessage');
+
+            // 1. Controle do Botão "X" (Limpar)
+            if (clearSearchBtn) clearSearchBtn.classList.toggle('hidden', term.length === 0);
+
+            // 2. Se a busca for curta, reseta para o Dashboard normal
+            if (term.length < 2) {
+                searchContainer.classList.add('hidden');
+                dashboard.classList.remove('hidden');
+                return;
+            }
+
+            // 3. Ativa Modo de Busca
+            dashboard.classList.add('hidden');
+            searchContainer.classList.remove('hidden');
+            
+            // 4. Filtra os Pedidos (Nome, ID ou Telefone)
+            const allOrders = services.getAllOrders();
+            const matches = allOrders.filter(o => {
+                const searchStr = `${o.clientName} ${o.id} ${o.clientPhone || ''}`.toLowerCase();
+                return searchStr.includes(term);
+            });
+
+            // 5. Limpa e Segrega os Resultados
+            resultsPending.innerHTML = '';
+            resultsDelivered.innerHTML = '';
+
+            const pendingOrders = matches.filter(o => o.orderStatus !== 'Entregue');
+            const deliveredOrders = matches.filter(o => o.orderStatus === 'Entregue');
+
+            // 6. Renderiza Resultados Pendentes (Visual Kanban Card)
+            if (pendingOrders.length > 0) {
+                wrapperPending.classList.remove('hidden');
+                pendingOrders.forEach(order => {
+                    // Requer que generateOrderCardHTML tenha sido exportado no orderRenderer.js
+                    if (UI.generateOrderCardHTML) {
+                        const card = UI.generateOrderCardHTML(order, 'pending');
+                        resultsPending.appendChild(card);
+                    }
+                });
+            } else {
+                wrapperPending.classList.add('hidden');
+            }
+
+            // 7. Renderiza Resultados Entregues (Visual Grid Card)
+            if (deliveredOrders.length > 0) {
+                wrapperDelivered.classList.remove('hidden');
+                deliveredOrders.forEach(order => {
+                    if (UI.generateOrderCardHTML) {
+                        const card = UI.generateOrderCardHTML(order, 'delivered');
+                        resultsDelivered.appendChild(card);
+                    }
+                });
+            } else {
+                wrapperDelivered.classList.add('hidden');
+            }
+
+            // 8. Mensagem "Nenhum resultado"
+            if (pendingOrders.length === 0 && deliveredOrders.length === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+            }
+        });
+
+        // Funcionalidade do botão Limpar (X)
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input')); 
+                searchInput.focus();
+            });
+        }
     }
 
     // --- AUTOMAÇÃO DE RESPOSTA DE AJUSTE (NOVO) ---
