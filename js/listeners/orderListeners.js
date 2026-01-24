@@ -286,8 +286,10 @@ export function initializeOrderListeners(UI, deps) {
         }
     });
 
-    // --- LISTENERS DA GRID ---
-    UI.DOM.ordersList.addEventListener('click', async (e) => {
+    // --- LISTENERS DA GRID (Refatorado para suportar Busca) ---
+    
+    // 1. Criamos a função lógica que sabe lidar com os cliques nos cards
+    const handleOrderCardClick = async (e) => {
         const btn = e.target.closest('button');
         if (!btn) return;
         // Se clicar no botão de fechar (caso ele estivesse aqui por engano)
@@ -332,6 +334,11 @@ export function initializeOrderListeners(UI, deps) {
                       try {
                           await services.deleteAllTransactionsByOrderId(id);
                           await services.deleteOrder(id);
+                          // Atualiza a busca se estiver ativa
+                          const searchInput = document.getElementById('globalSearchInput');
+                          if (searchInput && searchInput.value) {
+                              searchInput.dispatchEvent(new Event('input'));
+                          }
                       } catch (error) {
                           console.error("Erro ao excluir pedido e finanças:", error);
                           UI.showInfoModal("Falha ao excluir. Verifique o console.");
@@ -380,6 +387,9 @@ export function initializeOrderListeners(UI, deps) {
                         if (generate) {
                             await generateReceiptPdf(updatedOrderData, userCompanyName(), UI.showInfoModal);
                         }
+                        // Atualiza a busca se estiver ativa
+                        const searchInput = document.getElementById('globalSearchInput');
+                        if (searchInput && searchInput.value) searchInput.dispatchEvent(new Event('input'));
                     }
                 } 
                 else {
@@ -409,6 +419,9 @@ export function initializeOrderListeners(UI, deps) {
                         if (generate) {
                             await generateReceiptPdf(updatedOrderData, userCompanyName(), UI.showInfoModal);
                         }
+                        // Atualiza a busca se estiver ativa
+                        const searchInput = document.getElementById('globalSearchInput');
+                        if (searchInput && searchInput.value) searchInput.dispatchEvent(new Event('input'));
                     }
                 }
             } catch (error) {
@@ -416,7 +429,17 @@ export function initializeOrderListeners(UI, deps) {
                 UI.showInfoModal("Ocorreu um erro ao atualizar o pedido.");
             }
         }
-    });
+    };
+
+    // 2. Conectamos essa função à Lista Principal (Dashboard normal)
+    UI.DOM.ordersList.addEventListener('click', handleOrderCardClick);
+
+    // 3. Conectamos essa MESMA função à Lista de Busca (Resultados)
+    // Assim os botões funcionam nos dois lugares!
+    const searchResultsContainer = document.getElementById('searchResultsContainer');
+    if (searchResultsContainer) {
+        searchResultsContainer.addEventListener('click', handleOrderCardClick);
+    }
 
     // --- LISTENER DO MODAL DE DETALHES (View/Visualizar) ---
     UI.DOM.viewModal.addEventListener('click', async (e) => {
