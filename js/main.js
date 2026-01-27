@@ -1,12 +1,12 @@
 // js/main.js
-// ========================================================
+// ==========================================================
 // ORQUESTRADOR CENTRAL (v6.2.0 - Branding Update)
 // ========================================================
 
 async function main() {
     
-    // Cache Buster para garantir que o navegador baixe as novas versões dos módulos
-    const cacheBuster = `?v=${new Date().getTime()}`;
+    // Força uma versão nova manual para limpar o cache de todos
+const cacheBuster = `?v=6.3.0_FORCE_REFRESH`;
 
     try {
         // ========================================================
@@ -532,11 +532,14 @@ async function main() {
             userCompanyName: () => userCompanyName 
         });
 
-        const FinanceUIProxy = Object.create(UI);
-        FinanceUIProxy.renderFinanceDashboard = (transactions, config) => {
-            const { startDate, endDate } = getCurrentDashboardDates();
-            safeRenderFinance('ListenerProxy', transactions, config, calculateTotalPendingRevenue(startDate, endDate));
-        };
+       // O CÓDIGO CORRIGIDO (Copie e Cole isto no lugar)
+// [FIX] Usamos Object.assign para criar uma cópia editável, pois módulos são Read-Only
+const FinanceUIProxy = Object.assign({}, UI); 
+
+FinanceUIProxy.renderFinanceDashboard = (transactions, config) => {
+    const { startDate, endDate } = getCurrentDashboardDates();
+    safeRenderFinance('ListenerProxy', transactions, config, calculateTotalPendingRevenue(startDate, endDate));
+};
 
         initializeFinanceListeners(FinanceUIProxy, { 
             services: {
@@ -560,3 +563,5 @@ async function main() {
     }
 }
 main();
+
+
