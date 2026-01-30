@@ -1,9 +1,10 @@
 // js/approval.js
 // ===========================================================
 // ==========================================================
-// MÓDULO PÚBLICO DE APROVAÇÃO (v2.0.3 - SMART DETAILS)
+// MÓDULO PÚBLICO DE APROVAÇÃO (v2.0.4 - SORTED SIZES)
 // Correção 1: Leitura híbrida de whatsapp/whatsappNumber (Branding)
 // Correção 2: Exibição inteligente de Nº vs Cargo/Detalhe
+// Correção 3: Ordenação estrita de tamanhos (PP -> XGG -> Anos)
 // ==========================================================
 
 // 1. Configurações Dinâmicas (Inicia com padrões seguros)
@@ -215,8 +216,26 @@ const renderOrder = (order) => {
         
         if (p.partInputType === 'comum') {
             if (p.sizes) {
+                // ORDEM DE EXIBIÇÃO: Lista exata da regra de negócio
+                const sizeOrder = [
+                    "PP", "P", "M", "G", "GG", "XGG",
+                    "2 anos", "4 anos", "6 anos", "8 anos", "10 anos", "12 anos"
+                ];
+
                 const sizesStr = Object.entries(p.sizes).map(([cat, sizesObj]) => {
-                    const s = Object.entries(sizesObj).filter(([,q]) => q > 0).map(([k,v]) => `${k}(${v})`).join(', ');
+                    // Ordena os tamanhos dentro da categoria antes de gerar o HTML
+                    const sortedSizes = Object.entries(sizesObj)
+                        .filter(([,q]) => q > 0)
+                        .sort(([keyA], [keyB]) => {
+                            let idxA = sizeOrder.indexOf(keyA);
+                            let idxB = sizeOrder.indexOf(keyB);
+                            // Se não estiver na lista (ex: tamanho especial), joga pro final (999)
+                            if (idxA === -1) idxA = 999;
+                            if (idxB === -1) idxB = 999;
+                            return idxA - idxB;
+                        });
+
+                    const s = sortedSizes.map(([k,v]) => `${k}(${v})`).join(', ');
                     return s ? `<div class="mt-1"><span class="font-semibold text-gray-600 text-[10px] uppercase">${cat}:</span> ${s}</div>` : '';
                 }).join('');
                 detailsHtml += sizesStr;
