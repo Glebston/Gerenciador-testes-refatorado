@@ -46,15 +46,16 @@ export function initCatalogListeners() {
     
     // 1. Navegação: Trocar para o Catálogo
     if (DOM.menuBtn) {
-        // [NOVO] >>> COMANDO PARA REVELAR O BOTÃO <<<
-        // LÓGICA DE PROTEÇÃO PREMIUM
-        // O main.js já salvou o plano no localStorage ao fazer login
-        const userPlan = localStorage.getItem('userPlan'); 
-
-        // Só mostra se o plano for 'premium' (ajuste o nome conforme seu banco)
-        if (userPlan === 'premium' || userPlan === 'pro') {
+        
+        // --- TRAVA DE SEGURANÇA PREMIUM ---
+        const userPlan = localStorage.getItem('userPlan');
+        
+        // No seu sistema: 'pro' = PREMIUM | 'essencial' = PRO
+        // Só remove o 'hidden' se o plano for 'pro' (Premium)
+        if (userPlan === 'pro') {
             DOM.menuBtn.classList.remove('hidden'); 
-        } 
+        }
+        // ----------------------------------
 
         DOM.menuBtn.addEventListener('click', (e) => {
             e.preventDefault();
