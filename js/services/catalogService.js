@@ -1,7 +1,7 @@
 // js/services/catalogService.js
 // ========================================================
-// SERVIÇO DE CATÁLOGO (PREMIUM)
-// Responsabilidade: CRUD do Firestore + Upload ImgBB + Regras de Limite (30/20)
+// SERVIÇO DE CATÁLOGO (Versão 11.6.1 - Compatível)
+// Responsabilidade: CRUD do Firestore + Upload ImgBB + Regras de Limite
 // ========================================================
 
 import { db, auth } from "../firebaseConfig.js";
@@ -17,9 +17,9 @@ import {
     getDocs, 
     getCountFromServer,
     serverTimestamp 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Mesma chave utilizada no settingsLogic.js para consistência
+// Chave da API do ImgBB (Mesma do settingsLogic.js)
 const IMGBB_API_KEY = "f012978df48f3596b193c06e05589442";
 
 // --- 1. UPLOAD DE IMAGEM (ImgBB) ---
@@ -51,25 +51,28 @@ export async function addCatalogItem(itemData) {
     const user = auth.currentUser;
     if (!user) throw new Error("Usuário não autenticado");
     
-    // Pega o ID da empresa (assumindo mapeamento padrão ou o próprio UID)
-    // Nota: O controller deve passar o companyId correto, aqui usamos user.uid como fallback seguro
+    // Define o ID da empresa (se não vier no objeto, usa o do usuário logado)
     const companyId = itemData.companyId || user.uid;
     const itemsRef = collection(db, "companies", companyId, "catalog_items");
 
-    // A. VERIFICAÇÃO DE SEGURANÇA (Custo: 1 leitura leve)
-    const snapshot = await getCountFromServer(itemsRef);
-    const currentCount = snapshot.data().count;
+    // A. VERIFICAÇÃO DE SEGURANÇA (Contagem)
+    try {
+        const snapshot = await getCountFromServer(itemsRef);
+        const currentCount = snapshot.data().count;
 
-    if (currentCount >= 30) {
-        throw new Error("LIMITE ATINGIDO: Seu armazenamento está cheio (30/30). Exclua um item antigo para adicionar novos.");
+        if (currentCount >= 30) {
+            throw new Error("LIMITE ATINGIDO: Seu armazenamento está cheio (30/30). Exclua um item antigo para adicionar novos.");
+        }
+    } catch (err) {
+        // Se der erro na contagem (ex: coleção não existe), permite prosseguir
+        console.warn("Aviso na verificação de limite:", err);
     }
 
     // B. SALVA NO BANCO
-    // Forçamos isActive: false ao criar para o usuário revisar antes de publicar
     const docRef = await addDoc(itemsRef, {
         title: itemData.title,
         description: itemData.description || "",
-        price: itemData.price || "", // Opcional, salvo como string para flexibilidade ("10,00" ou "A partir de...")
+        price: itemData.price || "",
         category: itemData.category || "Geral",
         imageUrl: itemData.imageUrl,
         isActive: false, // Nasce como Rascunho
@@ -85,7 +88,7 @@ export async function toggleItemStatus(itemId, newStatus, companyId) {
 
     const itemRef = doc(db, "companies", companyId, "catalog_items", itemId);
 
-    // Se estiver tentando ATIVAR (newStatus === true), precisamos contar quantos já estão ativos
+    // Se for ATIVAR, verifica limite da vitrine
     if (newStatus === true) {
         const itemsRef = collection(db, "companies", companyId, "catalog_items");
         const q = query(itemsRef, where("isActive", "==", true));
@@ -98,13 +101,12 @@ export async function toggleItemStatus(itemId, newStatus, companyId) {
         }
     }
 
-    // Atualiza
     await updateDoc(itemRef, {
         isActive: newStatus
     });
 }
 
-// --- 4. LISTAR PRODUTOS (Para o Painel Admin) ---
+// --- 4. LISTAR PRODUTOS ---
 export async function getCatalogItems(companyId) {
     const itemsRef = collection(db, "companies", companyId, "catalog_items");
     const q = query(itemsRef, orderBy("createdAt", "desc"));
