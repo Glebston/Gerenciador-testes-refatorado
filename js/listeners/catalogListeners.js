@@ -1,7 +1,6 @@
 // js/listeners/catalogListeners.js
 // ========================================================
-// OUVINTES DO CATÁLOGO (O MAESTRO)
-// Responsabilidade: Conectar DOM + Service + Renderer
+// OUVINTES DO CATÁLOGO (v2.0 - Upsell & Navegação Fix)
 // ========================================================
 
 import { auth } from "../firebaseConfig.js";
@@ -9,13 +8,19 @@ import * as CatalogService from "../services/catalogService.js";
 import { renderCatalogUI } from "../ui/catalogRenderer.js";
 
 const DOM = {
-    // Navegação e Views
+    // Navegação Principal
     menuBtn: document.getElementById('catalogDashboardBtn'),
     catalogView: document.getElementById('catalogDashboard'),
     ordersView: document.getElementById('ordersDashboard'),
     financeView: document.getElementById('financeDashboard'),
     searchContainer: document.getElementById('searchContainer'),
     
+    // Botões de Interceptação (Para corrigir o "Fantasma")
+    financeMenuBtn: document.getElementById('financeDashboardBtn'),
+    
+    // Botão de Saída (Será criado no HTML no próximo passo)
+    exitBtn: document.getElementById('exitCatalogBtn'),
+
     // Modal
     modal: document.getElementById('catalogModal'),
     form: document.getElementById('catalogForm'),
@@ -24,7 +29,7 @@ const DOM = {
     closeXBtn: document.getElementById('closeCatalogModalBtn'),
     openModalBtn: document.getElementById('addCatalogItemBtn'),
 
-    // Inputs do Formulário
+    // Inputs
     itemId: document.getElementById('catalogItemId'),
     title: document.getElementById('catalogTitle'),
     category: document.getElementById('catalogCategory'),
@@ -40,82 +45,102 @@ const DOM = {
 };
 
 let currentCompanyId = null;
-let tempImageUrl = ""; // Armazena URL temporária durante edição
+let tempImageUrl = ""; 
 
 export function initCatalogListeners() {
     
-    // 1. Navegação: Trocar para o Catálogo
     if (DOM.menuBtn) {
-        
-        // --- TRAVA DE SEGURANÇA PREMIUM ---
+        // --- 1. LÓGICA DE UPSELL (Cadeado) ---
         const userPlan = localStorage.getItem('userPlan');
-        
-        // No seu sistema: 'pro' = PREMIUM | 'essencial' = PRO
-        // Só remove o 'hidden' se o plano for 'pro' (Premium)
-        if (userPlan === 'pro') {
-            DOM.menuBtn.classList.remove('hidden'); 
-        }
-        // ----------------------------------
+        const isPremium = (userPlan === 'pro'); // No seu sistema: 'pro' é Premium
 
+        // Mostra o botão para TODOS agora
+        DOM.menuBtn.classList.remove('hidden'); 
+
+        // Se NÃO for Premium, muda o visual para "Bloqueado"
+        if (!isPremium) {
+            DOM.menuBtn.innerHTML = `
+                <div class="flex items-center gap-2 text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Meu Catálogo <span class="text-[10px] bg-gray-200 px-1 rounded ml-1">PRO</span>
+                </div>
+            `;
+            // Remove hover bg-gray-50 para dar sensação de inativo, se quiser
+            DOM.menuBtn.classList.add('opacity-75'); 
+        }
+
+        // --- 2. CLIQUE NO MENU ---
         DOM.menuBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            
+            // TRAVA: Se não for Premium, exibe alerta e não abre
+            if (!isPremium) {
+                // Aqui você pode trocar por um Modal bonito depois
+                alert("🔒 FUNCIONALIDADE PREMIUM\n\nO Catálogo Digital é exclusivo do plano Premium.\nFale com o suporte para liberar sua vitrine!");
+                return; 
+            }
+
             const user = auth.currentUser;
             if (!user) return;
             
-            // Define ID da empresa (assumindo user.uid para MVP, ajustável para user_mappings)
             currentCompanyId = user.uid; 
-            
             switchViewToCatalog();
             loadCatalogData();
         });
     }
 
-    // 2. Abrir Modal (Novo Item)
-    if (DOM.openModalBtn) {
-        DOM.openModalBtn.addEventListener('click', () => {
-            openModal(); // Modo Criação (limpo)
+    // --- 3. CORREÇÃO DO FANTASMA (Interceptor) ---
+    // Quando clicar no Financeiro, garante que o Catálogo some
+    if (DOM.financeMenuBtn) {
+        DOM.financeMenuBtn.addEventListener('click', () => {
+            if(DOM.catalogView) DOM.catalogView.classList.add('hidden');
         });
     }
 
-    // 3. Fechar Modal
+    // --- 4. BOTÃO VOLTAR (Exit Strategy) ---
+    // Esse botão será adicionado ao HTML no Passo 3
+    // Usamos 'document.getElementById' dinâmico aqui caso o elemento ainda não exista no DOM load
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#exitCatalogBtn')) {
+            e.preventDefault();
+            // Esconde Catálogo
+            DOM.catalogView.classList.add('hidden');
+            // Mostra Pedidos (Padrão)
+            if(DOM.ordersView) DOM.ordersView.classList.remove('hidden');
+            if(DOM.searchContainer) DOM.searchContainer.classList.remove('hidden');
+        }
+    });
+
+    // --- 5. MODAL E AÇÕES (Manteve igual) ---
+    if (DOM.openModalBtn) DOM.openModalBtn.addEventListener('click', () => openModal());
     if (DOM.cancelBtn) DOM.cancelBtn.addEventListener('click', closeModal);
     if (DOM.closeXBtn) DOM.closeXBtn.addEventListener('click', closeModal);
-
-    // 4. Preview de Imagem
-    if (DOM.imageInput) {
-        DOM.imageInput.addEventListener('change', handleImageSelect);
-    }
-
-    // 5. Salvar (Criar ou Editar)
-    if (DOM.saveBtn) {
-        DOM.saveBtn.addEventListener('click', handleSave);
-    }
-
-    // 6. Ações da Lista (Event Delegation: Editar, Excluir, Toggle)
+    if (DOM.imageInput) DOM.imageInput.addEventListener('change', handleImageSelect);
+    if (DOM.saveBtn) DOM.saveBtn.addEventListener('click', handleSave);
     if (DOM.list) {
         DOM.list.addEventListener('click', handleListActions);
-        DOM.list.addEventListener('change', handleListChanges); // Para o Toggle Switch
+        DOM.list.addEventListener('change', handleListChanges);
     }
 }
 
 // --- FUNÇÕES DE NAVEGAÇÃO ---
 
 function switchViewToCatalog() {
-    // Esconde tudo
     if(DOM.ordersView) DOM.ordersView.classList.add('hidden');
     if(DOM.financeView) DOM.financeView.classList.add('hidden');
     if(DOM.searchContainer) DOM.searchContainer.classList.add('hidden');
     
-    // Mostra Catálogo
     DOM.catalogView.classList.remove('hidden');
     
-    // Feedback visual no menu (Opcional: fechar dropdown se necessário)
-    document.getElementById('userDropdown').classList.add('hidden');
+    // Fecha o dropdown do menu para UX melhor
+    const dropdown = document.getElementById('userDropdown');
+    if(dropdown) dropdown.classList.add('hidden');
 }
 
 async function loadCatalogData() {
     if (!currentCompanyId) return;
-    
     try {
         const data = await CatalogService.getCatalogItems(currentCompanyId);
         renderCatalogUI(data, currentCompanyId);
@@ -129,27 +154,21 @@ async function loadCatalogData() {
 
 function openModal(item = null) {
     DOM.modal.classList.remove('hidden');
-    
-    // Reseta estado
     DOM.saveBtn.disabled = false;
     DOM.saveBtn.textContent = "Salvar Produto";
     DOM.uploadLoader.classList.add('hidden');
 
     if (item) {
-        // MODO EDIÇÃO
         DOM.itemId.value = item.id;
         DOM.title.value = item.title;
         DOM.category.value = item.category;
         DOM.price.value = item.price;
         DOM.description.value = item.description;
-        
-        // Configura Imagem Existente
         tempImageUrl = item.imageUrl;
         DOM.imagePreview.src = item.imageUrl;
         DOM.imagePreview.classList.remove('hidden');
         DOM.imagePlaceholder.classList.add('hidden');
     } else {
-        // MODO CRIAÇÃO
         DOM.form.reset();
         DOM.itemId.value = "";
         tempImageUrl = "";
@@ -163,13 +182,12 @@ function closeModal() {
     DOM.modal.classList.add('hidden');
 }
 
-// --- LÓGICA DE UPLOAD E SALVAMENTO ---
+// --- UPLOAD E SALVAMENTO ---
 
 async function handleImageSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Preview Local Imediato
     const reader = new FileReader();
     reader.onload = (ev) => {
         DOM.imagePreview.src = ev.target.result;
@@ -183,21 +201,13 @@ async function handleSave(e) {
     e.preventDefault();
     
     const title = DOM.title.value.trim();
-    if (!title) {
-        alert("Por favor, informe o título do produto.");
-        return;
-    }
+    if (!title) { alert("Por favor, informe o título do produto."); return; }
 
     const file = DOM.imageInput.files[0];
     const isEditing = !!DOM.itemId.value;
 
-    // Validação: Criação exige imagem
-    if (!isEditing && !file) {
-        alert("A imagem do produto é obrigatória.");
-        return;
-    }
+    if (!isEditing && !file) { alert("A imagem do produto é obrigatória."); return; }
 
-    // Bloqueia botão
     const originalText = DOM.saveBtn.textContent;
     DOM.saveBtn.disabled = true;
     DOM.saveBtn.textContent = "Salvando...";
@@ -205,14 +215,12 @@ async function handleSave(e) {
 
     try {
         let finalImageUrl = tempImageUrl;
-
-        // Se tem arquivo novo, faz upload
         if (file) {
             finalImageUrl = await CatalogService.uploadCatalogImage(file);
         }
 
         const itemData = {
-            companyId: currentCompanyId, // Passado para o serviço validar user
+            companyId: currentCompanyId,
             title: title,
             category: DOM.category.value.trim(),
             price: DOM.price.value.trim(),
@@ -221,15 +229,13 @@ async function handleSave(e) {
         };
 
         if (isEditing) {
-            // Atualiza (merge)
             await CatalogService.updateCatalogItem(DOM.itemId.value, itemData, currentCompanyId);
         } else {
-            // Cria Novo
             await CatalogService.addCatalogItem(itemData);
         }
 
         closeModal();
-        await loadCatalogData(); // Recarrega lista
+        await loadCatalogData(); 
 
     } catch (error) {
         alert("Erro: " + error.message);
@@ -240,7 +246,7 @@ async function handleSave(e) {
     }
 }
 
-// --- AÇÕES DA LISTA (DELEGATION) ---
+// --- AÇÕES DA LISTA ---
 
 async function handleListActions(e) {
     const btn = e.target.closest('button');
@@ -262,16 +268,6 @@ async function handleListActions(e) {
     }
 
     if (action === 'editItem') {
-        // Busca dados atuais do DOM ou recarrega do banco? 
-        // Para eficiência, vamos buscar do banco rapidinho ou filtrar da lista atual se tivéssemos salvo em memória.
-        // Como o Firestore cacheia, getDoc é rápido.
-        // SIMPLIFICAÇÃO: Vamos pegar do array retornado no loadCatalogData se o tornarmos global, 
-        // mas para manter stateless, vamos fazer um "fetch" rápido ou reconstruir do card (arriscado).
-        // MELHOR: Vamos pegar do banco.
-        
-        // *Nota: Para MVP, vamos assumir que o serviço tem um método getItem ou vamos passar os dados via data-attributes no renderer.
-        // Como não criamos getItem no Service, vamos adicionar logicamente aqui a busca na lista renderizada? Não, muito complexo.
-        // Vamos apenas recarregar a lista e filtrar. É rápido.
         const result = await CatalogService.getCatalogItems(currentCompanyId);
         const item = result.items.find(i => i.id === id);
         if (item) openModal(item);
@@ -279,7 +275,6 @@ async function handleListActions(e) {
 }
 
 async function handleListChanges(e) {
-    // Para o Toggle Switch (Checkbox)
     const toggle = e.target;
     if (toggle.type === 'checkbox' && toggle.dataset.action === 'toggleStatus') {
         const id = toggle.dataset.id;
@@ -287,12 +282,10 @@ async function handleListChanges(e) {
 
         try {
             await CatalogService.toggleItemStatus(id, newStatus, currentCompanyId);
-            // Atualiza contadores sem recarregar tudo visualmente (opcional), 
-            // mas vamos recarregar para garantir consistência dos contadores de limite.
             await loadCatalogData(); 
         } catch (error) {
-            alert(error.message); // Exibe erro da Regra dos 20
-            toggle.checked = !newStatus; // Reverte visualmente
+            alert(error.message); 
+            toggle.checked = !newStatus; 
         }
     }
 }
