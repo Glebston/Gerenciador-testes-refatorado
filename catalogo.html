@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo Digital | Carregando...</title>
+    
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        /* Animação de Carregamento (Skeleton) */
+        .skeleton {
+            background: #e2e8f0;
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
+        <p class="text-gray-500 text-sm font-medium animate-pulse">Carregando catálogo...</p>
+    </div>
+
+    <header id="storeHeader" class="bg-white shadow-sm sticky top-0 z-40 border-b border-gray-100 hidden">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div id="companyLogoContainer" class="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-200">
+                    <img id="companyLogo" src="" alt="Logo" class="w-full h-full object-cover hidden">
+                    <svg id="companyLogoPlaceholder" class="w-6 h-6 text-gray-400 m-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
+                </div>
+                <div>
+                    <h1 id="companyName" class="text-base font-bold text-gray-900 leading-tight">Nome da Empresa</h1>
+                    <p class="text-xs text-green-600 font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Aberto agora
+                    </p>
+                </div>
+            </div>
+            
+            <a id="mainWhatsAppBtn" href="#" target="_blank" class="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full shadow-md transition transform hover:scale-105">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-8.683-2.031-9.676-.272-.099-.47-.149-.734-.149-.124 0-.198.025-.297.049s-.223.124-.347.273c-.124.149-.47.595-.47 1.438 0 .843.595 1.661.693 1.81.099.149 2.156 3.497 5.275 4.876.57.248 1.041.446 1.438.57.693.198 1.487.149 1.932-.05.595-.272 1.758-1.09 2.006-1.783.248-.693.248-1.338.174-1.462z"/></svg>
+            </a>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8 pb-20">
+        
+        <div id="emptyState" class="hidden text-center py-20">
+            <div class="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+            </div>
+            <h2 class="text-xl font-bold text-gray-700">Catálogo em construção</h2>
+            <p class="text-gray-500">Nenhum produto disponível no momento.</p>
+        </div>
+
+        <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6"></div>
+
+    </main>
+
+    <footer class="bg-white border-t py-6 mt-8 text-center">
+        <p class="text-xs text-gray-400 flex items-center justify-center gap-1">
+            Powered by 
+            <strong class="text-purple-600">PagLucro Gestor</strong>
+        </p>
+    </footer>
+
+    <script type="module">
+        import { db } from './js/firebaseConfig.js';
+        import { doc, getDoc, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 1. Captura o UID da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const companyId = urlParams.get('uid');
+
+        // Elementos DOM
+        const loadingScreen = document.getElementById('loadingScreen');
+        const storeHeader = document.getElementById('storeHeader');
+        const productGrid = document.getElementById('productGrid');
+        const emptyState = document.getElementById('emptyState');
+
+        // Dados da Empresa (para o WhatsApp)
+        let companyPhone = "";
+
+        async function initCatalog() {
+            if (!companyId) {
+                showError("Link inválido. Identificador da loja não encontrado.");
+                return;
+            }
+
+            try {
+                // A. Carregar Dados da Empresa (Logo, Nome, WhatsApp)
+                const companyRef = doc(db, "companies", companyId);
+                const companySnap = await getDoc(companyRef);
+
+                if (!companySnap.exists()) {
+                    showError("Loja não encontrada ou desativada.");
+                    return;
+                }
+
+                const companyData = companySnap.data();
+                renderHeader(companyData);
+
+                // B. Carregar Produtos Ativos
+                const productsRef = collection(db, "companies", companyId, "catalog_items");
+                // Query: Apenas ativos, ordenados por criação
+                const q = query(productsRef, where("isActive", "==", true)); // OrderBy pode exigir índice composto, simplifiquei para MVP
+                
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    loadingScreen.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                    return;
+                }
+
+                renderProducts(querySnapshot);
+                
+                // Finaliza carregamento
+                loadingScreen.classList.add('hidden');
+                storeHeader.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Erro fatal:", error);
+                showError("Não foi possível carregar o catálogo. Tente novamente.");
+            }
+        }
+
+        function renderHeader(data) {
+            document.title = `${data.companyName || 'Loja'} | Catálogo Digital`;
+            
+            // Nome
+            document.getElementById('companyName').textContent = data.companyName || "Nossa Loja";
+            
+            // Logo (Tenta pegar do config de pagamento ou do campo principal se houver)
+            // *Assumindo que você possa ter salvo logoUrl no documento principal em algum momento ou vamos pegar o padrão
+            // Para MVP, se não tiver logo, mantemos o placeholder.
+            // Se você implementou o logo nas configurações, ele estaria em 'config/payment'. 
+            // Vamos fazer uma busca rápida extra no config de pagamento para garantir o logo?
+            loadLogoFromConfig(companyId);
+
+            // WhatsApp Global
+            if (data.whatsapp) {
+                companyPhone = data.whatsapp.replace(/\D/g, ''); // Limpa número
+                document.getElementById('mainWhatsAppBtn').href = `https://wa.me/55${companyPhone}`;
+            } else {
+                document.getElementById('mainWhatsAppBtn').classList.add('hidden');
+            }
+        }
+
+        async function loadLogoFromConfig(uid) {
+            try {
+                const configRef = doc(db, 'companies', uid, 'config', 'payment');
+                const configSnap = await getDoc(configRef);
+                if (configSnap.exists() && configSnap.data().logoUrl) {
+                    const logoImg = document.getElementById('companyLogo');
+                    logoImg.src = configSnap.data().logoUrl;
+                    logoImg.classList.remove('hidden');
+                    document.getElementById('companyLogoPlaceholder').classList.add('hidden');
+                }
+            } catch(e) { console.log("Sem logo configurada"); }
+        }
+
+        function renderProducts(snapshot) {
+            let html = "";
+            snapshot.forEach(doc => {
+                const item = doc.data();
+                const price = item.price || "Consulte";
+                const phoneToUse = companyPhone || ""; 
+                
+                // Mensagem personalizada para o WhatsApp
+                const msg = encodeURIComponent(`Olá! Vi o produto *${item.title}* no seu catálogo e gostaria de mais informações.`);
+                const whatsappLink = phoneToUse ? `https://wa.me/55${phoneToUse}?text=${msg}` : "#";
+
+                html += `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group hover:shadow-md transition duration-300">
+                        <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                            <img src="${item.imageUrl}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        </div>
+                        
+                        <div class="p-4 flex-1 flex flex-col">
+                            <span class="text-[10px] font-bold text-purple-600 uppercase mb-1">${item.category || 'Geral'}</span>
+                            <h3 class="text-sm font-bold text-gray-900 leading-tight mb-1 line-clamp-2">${item.title}</h3>
+                            <p class="text-xs text-gray-500 mb-3 line-clamp-2">${item.description || ''}</p>
+                            
+                            <div class="mt-auto flex items-center justify-between pt-2 border-t border-gray-50">
+                                <span class="text-sm font-bold text-gray-900">${price}</span>
+                                <a href="${whatsappLink}" target="_blank" class="bg-green-100 text-green-700 hover:bg-green-600 hover:text-white text-xs font-bold py-1.5 px-3 rounded-lg transition flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-8.683-2.031-9.676-.272-.099-.47-.149-.734-.149-.124 0-.198.025-.297.049s-.223.124-.347.273c-.124.149-.47.595-.47 1.438 0 .843.595 1.661.693 1.81.099.149 2.156 3.497 5.275 4.876.57.248 1.041.446 1.438.57.693.198 1.487.149 1.932-.05.595-.272 1.758-1.09 2.006-1.783.248-.693.248-1.338.174-1.462z"/></svg>
+                                    Pedir
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            productGrid.innerHTML = html;
+        }
+
+        function showError(msg) {
+            loadingScreen.innerHTML = `
+                <div class="text-red-500 mb-2">
+                    <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <p class="text-gray-800 font-bold">${msg}</p>
+            `;
+        }
+
+        // Inicia
+        initCatalog();
+    </script>
+</body>
+</html>
